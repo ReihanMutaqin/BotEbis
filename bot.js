@@ -94,19 +94,15 @@ STATUS: Completed
 TEKNISI: Ahmad Fauzi
 CATATAN: Redaman -18dBm, ONT terpasang, internet aktif
 
-Pendaftaran Teknisi STO:
-1. Daftarkan diri sendiri:
-/daftar_teknisi JTN Hengky Julio
+Perintah Cepat Update:
+1. Pakai :me (Nama Telegram Sendiri):
+/update 1002476754 Pending :me Pending jadwal
 
-2. Daftarkan orang lain:
-/daftar_teknisi JTN Hengky Julio @Tele123
+2. Pakai Nama Lengkap (Tanda Kutip):
+/update 1002476754 Pending "Hengky Julio" Pending jadwal
 
-Cek Teknisi STO:
-/list_teknisi [KODE_STO]
-Contoh: /list_teknisi JTN
-
-Hapus Teknisi Terdaftar:
-/hapus_teknisi Hengky Julio`;
+3. Set Nama Teknisi Saja:
+/updateteknisi 1002476754 Hengky Julio`;
 }
 
 function parseTemplateMessage(text) {
@@ -134,6 +130,57 @@ function parseTemplateMessage(text) {
   return data.orderId ? data : null;
 }
 
+function parseUpdateCommandArgs(rawArgs, sender) {
+  const trimmed = rawArgs.trim();
+  const firstSpace = trimmed.indexOf(' ');
+  if (firstSpace === -1) return null;
+  const orderId = trimmed.substring(0, firstSpace).trim();
+  
+  const remainder1 = trimmed.substring(firstSpace + 1).trim();
+  const secondSpace = remainder1.indexOf(' ');
+  let status = remainder1;
+  let remainder2 = '';
+  
+  if (secondSpace !== -1) {
+    status = remainder1.substring(0, secondSpace).trim();
+    remainder2 = remainder1.substring(secondSpace + 1).trim();
+  }
+
+  let techName = '';
+  let notes = '';
+
+  if (remainder2) {
+    if (remainder2.toLowerCase().startsWith(':me')) {
+      const senderName = [sender.first_name, sender.last_name].filter(Boolean).join(' ') || (sender.username ? `@${sender.username}` : 'Teknisi');
+      techName = senderName;
+      notes = remainder2.substring(3).trim();
+    } else if (remainder2.startsWith('"') || remainder2.startsWith("'")) {
+      const quoteChar = remainder2[0];
+      const endQuote = remainder2.indexOf(quoteChar, 1);
+      if (endQuote !== -1) {
+        techName = remainder2.substring(1, endQuote).trim();
+        notes = remainder2.substring(endQuote + 1).trim();
+      } else {
+        techName = remainder2.substring(1).trim();
+      }
+    } else if (remainder2.startsWith('-')) {
+      techName = '';
+      notes = remainder2.substring(1).trim();
+    } else {
+      const spaceIdx = remainder2.indexOf(' ');
+      if (spaceIdx === -1) {
+        techName = remainder2;
+        notes = '';
+      } else {
+        techName = remainder2.substring(0, spaceIdx).trim();
+        notes = remainder2.substring(spaceIdx + 1).trim();
+      }
+    }
+  }
+
+  return { orderId, status, techName, notes };
+}
+
 function formatTechniciansBySTOList(techs, filterSTO = null) {
   if (techs.length === 0) {
     return filterSTO 
@@ -149,7 +196,6 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
     }
   }
 
-  // Group by STO
   const grouped = {};
   filtered.forEach(t => {
     const stoKey = (t.sto || 'UMUM').toUpperCase();
@@ -181,11 +227,12 @@ function setupBotListeners(bot) {
     const text = `Selamat Datang di Bot EBIS Telkom
 
 Fitur & Perintah Bot:
+- /update <order_id> <status> :me <catatan> - Update status & gunakan nama akun Telegram sendiri
+- /update <order_id> <status> "Nama Lengkap" <catatan> - Update status dengan nama lengkap
+- /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
 - /daftar_teknisi <STO> <Nama_Teknisi> [@Username] - Daftarkan diri sendiri atau orang lain ke STO
 - /list_teknisi [KODE_STO] - Lihat daftar teknisi per STO
 - /hapus_teknisi <Nama_atau_STO> - Hapus pendaftaran teknisi
-- /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi (Gunakan '-' untuk mengosongkan)
-- /update <order_id> <status> [teknisi] [catatan] - Update status order
 - /cek <nomor_order> - Cek detail work order
 - /rekap - Lihat ringkasan statistik order
 - /pending - Lihat daftar task pending
@@ -307,11 +354,12 @@ Contoh:
       return bot.sendMessage(chatId, `Format Perintah Update Teknisi:
 /updateteknisi <order_id> <nama_teknisi>
 
-Gunakan '-' (strip) jika ingin menghapus/mengosongkan teknisi.
+Gunakan :me untuk nama Telegram kamu sendiri.
+Gunakan '-' (strip) jika ingin mengosongkan.
 
 Contoh:
-/updateteknisi 1001524450 Ahmad Fauzi
-/updateteknisi 1001524450 -`);
+/updateteknisi 1001524450 :me
+/updateteknisi 1001524450 Hengky Julio`);
     }
 
     const parts = rawArgs.split(' ');
@@ -322,9 +370,62 @@ Contoh:
       return bot.sendMessage(chatId, `Silakan masukkan nama teknisi setelah nomor order.`);
     }
 
-    if (techName === '-') techName = '';
+    if (techName.toLowerCase() === ':me') {
+      techName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+    } else if (techName === '-') {
+      techName = '';
+    }
 
     return handleAssignTechnician(bot, chatId, orderId, techName);
+  });
+
+  // Command /update <order_id> <status> <teknisi> <catatan>
+  bot.onText(/\/update(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    const rawArgs = match[1];
+    if (!rawArgs) {
+      return bot.sendMessage(chatId, `Format Perintah Update:
+/update <order_id> <status> <teknisi_atau_:me> <catatan>
+
+Contoh Pakai :me (Nama Telegram Kamu):
+/update 1002476754 Pending :me Pending jadwal
+
+Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
+/update 1002476754 Pending "Hengky Julio" Pending jadwal`);
+    }
+
+    const parsed = parseUpdateCommandArgs(rawArgs, msg.from);
+    if (!parsed) {
+      return bot.sendMessage(chatId, `Format tidak sesuai. Contoh: /update 1002476754 Pending :me Pending jadwal`);
+    }
+
+    const { orderId, status, techName, notes } = parsed;
+    const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
+    const matchedStatus = validStatuses.find(s => s.toLowerCase() === status?.toLowerCase());
+
+    if (!matchedStatus) {
+      return bot.sendMessage(chatId, `Status ${status} tidak valid! Pilihan: Pending, On Progress, Completed, Kendala, Cancel`);
+    }
+
+    try {
+      const task = await getTaskById(orderId);
+      if (!task) {
+        return bot.sendMessage(chatId, `Work order ${orderId} tidak ditemukan.`);
+      }
+
+      const updates = { trackerStatus: matchedStatus };
+      if (techName !== undefined && techName !== '') updates.technicianName = techName;
+      if (notes) updates.notes = notes;
+
+      await updateTask(task.id, updates);
+
+      const updatedTask = await getTaskById(task.id);
+      return bot.sendMessage(chatId, `Berhasil Memperbarui Order!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
+    } catch (err) {
+      console.error(err);
+      return bot.sendMessage(chatId, `Terjadi kesalahan saat update order: ${err.message}`);
+    }
   });
 
   // Handle Text Messages & Menu Buttons
@@ -371,15 +472,13 @@ Contoh:
       if (text === 'Bantuan') {
         return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
 
-1. Pendaftaran STO:
-   - Diri sendiri: /daftar_teknisi JTN Hengky Julio
-   - Orang lain: /daftar_teknisi JTN Hengky Julio @Tele123
-2. Cek Daftar Teknisi STO:
-   - Semua STO: /list_teknisi
-   - Spesifik STO: /list_teknisi JTN
-3. Hapus Teknisi STO: /hapus_teknisi Hengky Julio
-4. Assign & Notif: Klik "Assign & Notif STO" di detail order.
-5. Cek Order: Kirim nomor order (misal: 1001524450)
+1. Perintah Update :me:
+   /update 1002476754 Pending :me Pending jadwal
+2. Perintah Update Nama Lengkap:
+   /update 1002476754 Pending "Hengky Julio" Pending jadwal
+3. Pendaftaran STO:
+   /daftar_teknisi JTN Hengky Julio @Tele123
+4. Cek Order: Kirim nomor order (misal: 1001524450)
 
 Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       }
@@ -403,7 +502,15 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
             const matchedStatus = validStatuses.find(s => s.toLowerCase() === parsed.status.toLowerCase());
             if (matchedStatus) updates.trackerStatus = matchedStatus;
           }
-          if (parsed.technicianName) updates.technicianName = parsed.technicianName === '-' ? '' : parsed.technicianName;
+          if (parsed.technicianName) {
+            if (parsed.technicianName.toLowerCase() === ':me') {
+              updates.technicianName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+            } else if (parsed.technicianName === '-') {
+              updates.technicianName = '';
+            } else {
+              updates.technicianName = parsed.technicianName;
+            }
+          }
           if (parsed.notes) updates.notes = parsed.notes;
 
           if (Object.keys(updates).length === 0) {
@@ -426,7 +533,12 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       if (state.action === 'awaiting_search') {
         return handleSearch(bot, chatId, text);
       } else if (state.action === 'awaiting_assign') {
-        const tName = text === '-' ? '' : text;
+        let tName = text;
+        if (text.toLowerCase() === ':me') {
+          tName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+        } else if (text === '-') {
+          tName = '';
+        }
         return handleAssignTechnician(bot, chatId, state.orderId, tName);
       } else if (state.action === 'awaiting_note') {
         return handleUpdateNote(bot, chatId, state.orderId, text);
@@ -440,91 +552,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
     }
   });
 
-  bot.onText(/\/cek(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    delete userStates[chatId];
-    const queryStr = match[1];
-    if (!queryStr) {
-      userStates[chatId] = { action: 'awaiting_search' };
-      return bot.sendMessage(chatId, 'Silakan masukkan Nomor Order atau Nama Pelanggan:');
-    }
-    return handleSearch(bot, chatId, queryStr.trim());
-  });
-
-  bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
-    delete userStates[msg.chat.id];
-    return handleRekap(bot, msg.chat.id);
-  });
-
-  bot.onText(/\/pending(?:@\w+)?/, async (msg) => {
-    delete userStates[msg.chat.id];
-    return handleTaskListByStatus(bot, msg.chat.id, 'Pending');
-  });
-
-  bot.onText(/\/kendala(?:@\w+)?/, async (msg) => {
-    delete userStates[msg.chat.id];
-    return handleTaskListByStatus(bot, msg.chat.id, 'Kendala');
-  });
-
-  bot.onText(/\/teknisi(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    delete userStates[chatId];
-    const techName = match[1];
-    if (!techName) {
-      userStates[chatId] = { action: 'awaiting_teknisi' };
-      return bot.sendMessage(chatId, 'Masukkan nama teknisi yang ingin dicari:');
-    }
-    return handleSearchTeknisi(bot, chatId, techName.trim());
-  });
-
-  bot.onText(/\/update(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
-    const chatId = msg.chat.id;
-    delete userStates[chatId];
-    const rawArgs = match[1];
-    if (!rawArgs) {
-      return bot.sendMessage(chatId, `Format Perintah Update:
-/update <order_id> <status> [teknisi] [catatan]
-
-Pilihan Status: Pending, On Progress, Completed, Kendala, Cancel
-
-Contoh:
-/update 1001524450 Completed Budi "Selesai diinstal"`);
-    }
-
-    const parts = rawArgs.split(' ');
-    const orderId = parts[0];
-    const status = parts[1];
-    let tech = parts[2] || '';
-    if (tech === '-') tech = '';
-    const notes = parts.slice(3).join(' ') || '';
-
-    const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
-    const matchedStatus = validStatuses.find(s => s.toLowerCase() === status?.toLowerCase());
-
-    if (!matchedStatus) {
-      return bot.sendMessage(chatId, `Status ${status} tidak valid! Pilihan: Pending, On Progress, Completed, Kendala, Cancel`);
-    }
-
-    try {
-      const task = await getTaskById(orderId);
-      if (!task) {
-        return bot.sendMessage(chatId, `Work order ${orderId} tidak ditemukan.`);
-      }
-
-      const updates = { trackerStatus: matchedStatus };
-      if (tech !== undefined) updates.technicianName = tech;
-      if (notes) updates.notes = notes;
-
-      await updateTask(task.id, updates);
-
-      const updatedTask = await getTaskById(task.id);
-      return bot.sendMessage(chatId, `Berhasil Memperbarui Order!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
-    } catch (err) {
-      console.error(err);
-      return bot.sendMessage(chatId, `Terjadi kesalahan saat update order: ${err.message}`);
-    }
-  });
-
+  // Handle Callback Queries
   bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
@@ -586,7 +614,7 @@ Contoh:
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `Ketik nama teknisi untuk order ${orderId} di chat ini (atau ketik '-' untuk mengosongkan), atau gunakan perintah:\n/updateteknisi ${orderId} NamaTeknisi`);
+      return bot.sendMessage(chatId, `Ketik nama teknisi (atau ketik ':me' untuk nama kamu sendiri), atau gunakan perintah:\n/updateteknisi ${orderId} :me`);
     }
 
     if (data.startsWith('note:')) {
