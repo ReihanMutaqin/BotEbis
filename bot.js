@@ -64,6 +64,33 @@ function getStatusBadge(status) {
   return '<b>Pending</b>';
 }
 
+function buildPromptForMissingFields(task, statusName) {
+  const missingFields = [];
+  if (!task.woId || task.woId === '-') missingFields.push('WO ID: WO123456');
+  if (!task.nik || task.nik === '-') missingFields.push('NIK: 12345678');
+
+  const stLower = (statusName || '').toLowerCase();
+  if (!task.notes || task.notes === '-') {
+    if (stLower === 'kendala') {
+      missingFields.push('CATATAN: Alasan kendala...');
+    } else if (stLower === 'pending') {
+      missingFields.push('CATATAN: Alasan pending...');
+    } else if (stLower === 'completed') {
+      missingFields.push('CATATAN: Selesai, redaman OK...');
+    } else {
+      missingFields.push('CATATAN: Keterangan / progres...');
+    }
+  } else {
+    missingFields.push('CATATAN: Update catatan...');
+  }
+
+  const promptCode = `<code>${missingFields.join('\n')}</code>`;
+
+  return `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi ${escapeHtml(statusName)}.</b>\n\n` +
+    `📝 <b>Silakan lengkapi data yang masih kosong (salin & isi template di bawah):</b>\n\n` +
+    `${promptCode}`;
+}
+
 function formatTaskMessage(task) {
   const orderId = escapeHtml(task.order || task.id);
   const woId = escapeHtml(task.woId || '-');
@@ -912,63 +939,11 @@ function setupBotListeners(bot) {
 
         await updateTask(task.id, { trackerStatus: newStatus, updatedBy });
         const updatedTask = await getTaskById(task.id);
-        const newBadge = getStatusBadge(newStatus);
-        const updateText = `<b>Status berhasil diperbarui menjadi ${newBadge}!</b>\n\n${formatTaskMessage(updatedTask)}`;
-
-        try {
-          await bot.editMessageText(updateText, {
-            chat_id: chatId,
-            message_id: query.message.message_id,
-            parse_mode: 'HTML',
-            ...getTaskActionButtons(updatedTask.id)
-          });
-        } catch (e) {
-          await bot.sendMessage(chatId, updateText, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
-        }
-
-        const stLower = newStatus.toLowerCase();
-
-        if (stLower === 'kendala') {
-          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
-          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\n📝 <b>Silakan ketik alasan / catatan kendala untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
-        }
-
-        if (stLower === 'pending') {
-          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
-          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Pending.</b>\n\n📝 <b>Silakan ketik alasan / catatan pending untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
-        }
-
-        if (stLower === 'completed') {
-          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
-          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          const missingFields = [];
-          if (!updatedTask.notes || updatedTask.notes === '-') missingFields.push('CATATAN: Selesai, redaman OK');
-          if (!updatedTask.woId || updatedTask.woId === '-') missingFields.push('WO ID: WO123456');
-          if (!updatedTask.nik || updatedTask.nik === '-') missingFields.push('NIK: 12345678');
-
-          const promptContent = missingFields.length > 0
-            ? `<code>${missingFields.join('\n')}</code>`
-            : `<code>CATATAN: Keterangan hasil pekerjaan...</code>`;
-
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Completed.</b>\n\n📝 <b>Silakan isi catatan hasil pekerjaan / data yang masih kosong di chat ini:</b>\n\n${promptContent}`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
-        }
-
-        if (stLower === 'on progress') {
-          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
-          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          const missingFields = [];
-          if (!updatedTask.woId || updatedTask.woId === '-') missingFields.push('WO ID: WO123456');
-          if (!updatedTask.nik || updatedTask.nik === '-') missingFields.push('NIK: 12345678');
-          if (!updatedTask.notes || updatedTask.notes === '-') missingFields.push('CATATAN: Penarikan kabel / progres');
-
-          const promptContent = missingFields.length > 0
-            ? `<code>${missingFields.join('\n')}</code>`
-            : `<code>WO ID: WO123456\nNIK: 12345678</code>`;
-
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi On Progress.</b>\n\n📝 <b>Silakan lengkapi data WO ID & NIK (atau catatan) untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>\n\n${promptContent}`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
-        }
+        
+        userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
+        userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
+        const promptText = buildPromptForMissingFields(updatedTask, newStatus);
+        return bot.sendMessage(chatId, promptText, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
       }
@@ -987,7 +962,10 @@ function setupBotListeners(bot) {
       const userId = query.from ? query.from.id : '';
       userStates[`${chatId}_${userId}`] = { action: 'awaiting_note', orderId };
       userStates[chatId] = { action: 'awaiting_note', orderId };
-      return bot.sendMessage(chatId, `<b>Ketik catatan baru untuk order <code>${escapeHtml(orderId)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+      const task = await getTaskById(orderId);
+      if (task) {
+        return bot.sendMessage(chatId, buildPromptForMissingFields(task, task.trackerStatus || 'Pending'), { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+      }
     }
 
     if (data.startsWith('refresh:')) {
