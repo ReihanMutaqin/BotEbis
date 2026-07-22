@@ -29,16 +29,16 @@ function isMenuButton(text) {
 function formatTaskMessage(task) {
   return `DETAIL WORK ORDER EBIS
   
-Order ID: \`${task.order || task.id}\`
+Order ID: ${task.order || task.id}
 Pelanggan: ${task.customerName || '-'}
 Alamat: ${task.address || '-'}
 STO / Witel: ${task.sto || '-'} / ${task.witel || '-'}
-No. Internet: \`${task.internet || '-'}\`
+No. Internet: ${task.internet || '-'}
 Layanan: ${task.serviceType || task.paket || '-'}
-Status: *${task.trackerStatus || 'Pending'}*
-Teknisi: ${task.technicianName || '_Belum ditugaskan_'}
+Status: ${task.trackerStatus || 'Pending'}
+Teknisi: ${task.technicianName || 'Belum ditugaskan'}
 Catatan: ${task.notes || '-'}
-Status Resume: \`${task.statusResume || '-'}\`
+Status Resume: ${task.statusResume || '-'}
 Order Date: ${task.orderDate || '-'}
 `;
 }
@@ -88,12 +88,10 @@ function getTemplateGuideText() {
 
 Salin & isi template di bawah ini:
 
-\`\`\`text
 ORDER: 1001524450
 STATUS: Completed
 TEKNISI: Ahmad Fauzi
 CATATAN: Redaman -18dBm, ONT terpasang, internet aktif
-\`\`\`
 
 Pendaftaran Teknisi STO:
 Ketik: /daftar_teknisi <STO> <Nama_Teknisi>
@@ -145,10 +143,7 @@ Fitur & Perintah Bot:
 
 Gunakan menu di bawah ini untuk akses cepat:`;
 
-    await bot.sendMessage(chatId, text, { 
-      parse_mode: 'Markdown',
-      ...getMainMenuKeyboard() 
-    });
+    await bot.sendMessage(chatId, text, getMainMenuKeyboard());
   });
 
   // Command /daftar_teknisi <sto> <nama>
@@ -158,10 +153,10 @@ Gunakan menu di bawah ini untuk akses cepat:`;
     const rawArgs = match[1];
     if (!rawArgs) {
       return bot.sendMessage(chatId, `Format Pendaftaran Teknisi ke STO:
-\`/daftar_teknisi <STO> <Nama_Teknisi>\`
+/daftar_teknisi <STO> <Nama_Teknisi>
 
 Contoh:
-\`/daftar_teknisi JTN Ahmad Fauzi\``, { parse_mode: 'Markdown' });
+/daftar_teknisi JTN Ahmad Fauzi`);
     }
 
     const parts = rawArgs.split(' ');
@@ -176,11 +171,11 @@ Contoh:
     await registerTechnician(chatId, username, techName, sto);
 
     return bot.sendMessage(chatId, `Berhasil Terdaftar!
-Nama: *${techName}*
-STO: *${sto.toUpperCase()}*
+Nama: ${techName}
+STO: ${sto.toUpperCase()}
 Telegram: ${username || 'ID ' + chatId}
 
-Setiap ada order baru di STO *${sto.toUpperCase()}*, kamu dapat dipilah & dikirimi notifikasi langsung oleh bot.`, { parse_mode: 'Markdown' });
+Setiap ada order baru di STO ${sto.toUpperCase()}, kamu dapat dipilah & dikirimi notifikasi langsung oleh bot.`);
   });
 
   // Command /list_teknisi
@@ -190,15 +185,15 @@ Setiap ada order baru di STO *${sto.toUpperCase()}*, kamu dapat dipilah & dikiri
     try {
       const techs = await getAllTechnicians();
       if (techs.length === 0) {
-        return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: \`/daftar_teknisi <STO> <Nama>\``, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama>`);
       }
 
       let text = `DAFTAR TEKNISI TERDAFTAR PER STO (${techs.length} total):\n\n`;
       techs.forEach((t, i) => {
-        text += `${i + 1}. *${t.name}* (STO: \`${t.sto}\`)\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
+        text += `${i + 1}. ${t.name} (STO: ${t.sto})\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
       });
 
-      return bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, text);
     } catch (err) {
       return bot.sendMessage(chatId, `Gagal mengambil daftar teknisi: ${err.message}`);
     }
@@ -207,7 +202,7 @@ Setiap ada order baru di STO *${sto.toUpperCase()}*, kamu dapat dipilah & dikiri
   // Command /template
   bot.onText(/\/template(?:@\w+)?/, async (msg) => {
     delete userStates[msg.chat.id];
-    return bot.sendMessage(msg.chat.id, getTemplateGuideText(), { parse_mode: 'Markdown' });
+    return bot.sendMessage(msg.chat.id, getTemplateGuideText());
   });
 
   // Command /updateteknisi <order_id> <nama_teknisi>
@@ -217,10 +212,10 @@ Setiap ada order baru di STO *${sto.toUpperCase()}*, kamu dapat dipilah & dikiri
     const rawArgs = match[1];
     if (!rawArgs) {
       return bot.sendMessage(chatId, `Format Perintah Update Teknisi:
-\`/updateteknisi <order_id> <nama_teknisi>\`
+/updateteknisi <order_id> <nama_teknisi>
 
 Contoh:
-\`/updateteknisi 1001524450 Ahmad Fauzi\``, { parse_mode: 'Markdown' });
+/updateteknisi 1001524450 Ahmad Fauzi`);
     }
 
     const parts = rawArgs.split(' ');
@@ -240,25 +235,24 @@ Contoh:
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
-    // IF text is a menu button, CLEAR any pending input state and process menu button!
     if (isMenuButton(text)) {
       delete userStates[chatId];
 
       if (text === 'Template Update') {
-        return bot.sendMessage(chatId, getTemplateGuideText(), { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, getTemplateGuideText());
       }
 
       if (text === 'Daftar Teknisi STO') {
         const techs = await getAllTechnicians();
         if (techs.length === 0) {
-          return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: \`/daftar_teknisi <STO> <Nama>\``, { parse_mode: 'Markdown' });
+          return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama>`);
         }
 
         let tText = `DAFTAR TEKNISI TERDAFTAR PER STO (${techs.length} total):\n\n`;
         techs.forEach((t, i) => {
-          tText += `${i + 1}. *${t.name}* (STO: \`${t.sto}\`)\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
+          tText += `${i + 1}. ${t.name} (STO: ${t.sto})\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
         });
-        return bot.sendMessage(chatId, tText, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, tText);
       }
 
       if (text === 'Cek Work Order') {
@@ -288,10 +282,10 @@ Contoh:
 
 1. Pendaftaran STO: /daftar_teknisi JTN Ahmad Fauzi
 2. Assign & Notif: Klik "Assign & Notif STO" di detail order.
-3. Cek Order: Kirim nomor order (misal: \`1001524450\`)
+3. Cek Order: Kirim nomor order (misal: 1001524450)
 4. Template Update: /template
 
-Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' });
+Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       }
     }
 
@@ -301,10 +295,10 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
       const parsed = parseTemplateMessage(text);
       if (parsed && parsed.orderId) {
         try {
-          await bot.sendMessage(chatId, `Memproses update dari template untuk order \`${parsed.orderId}\`...`, { parse_mode: 'Markdown' });
+          await bot.sendMessage(chatId, `Memproses update dari template untuk order ${parsed.orderId}...`);
           const task = await getTaskById(parsed.orderId);
           if (!task) {
-            return bot.sendMessage(chatId, `Order ID \`${parsed.orderId}\` tidak ditemukan di database.`, { parse_mode: 'Markdown' });
+            return bot.sendMessage(chatId, `Order ID ${parsed.orderId} tidak ditemukan di database.`);
           }
 
           const updates = {};
@@ -322,17 +316,13 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
 
           await updateTask(task.id, updates);
           const updatedTask = await getTaskById(task.id);
-          return bot.sendMessage(chatId, `ORDER BERHASIL DIPERBARUI DARI TEMPLATE!\n\n${formatTaskMessage(updatedTask)}`, {
-            parse_mode: 'Markdown',
-            ...getTaskActionButtons(updatedTask.id)
-          });
+          return bot.sendMessage(chatId, `ORDER BERHASIL DIPERBARUI DARI TEMPLATE!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
         } catch (err) {
           return bot.sendMessage(chatId, `Terjadi kesalahan saat memproses template: ${err.message}`);
         }
       }
     }
 
-    // Only process state if NOT a menu button!
     if (userStates[chatId]) {
       const state = userStates[chatId];
       delete userStates[chatId];
@@ -348,13 +338,11 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
       }
     }
 
-    // Default search fallback
     if (text.length >= 3) {
       return handleSearch(bot, chatId, text);
     }
   });
 
-  // Command /cek <order_id>
   bot.onText(/\/cek(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
@@ -398,12 +386,12 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
     const rawArgs = match[1];
     if (!rawArgs) {
       return bot.sendMessage(chatId, `Format Perintah Update:
-\`/update <order_id> <status> [teknisi] [catatan]\`
+/update <order_id> <status> [teknisi] [catatan]
 
-Pilihan Status: \`Pending\`, \`On Progress\`, \`Completed\`, \`Kendala\`, \`Cancel\`
+Pilihan Status: Pending, On Progress, Completed, Kendala, Cancel
 
 Contoh:
-\`/update 1001524450 Completed Budi "Selesai diinstal"\``, { parse_mode: 'Markdown' });
+/update 1001524450 Completed Budi "Selesai diinstal"`);
     }
 
     const parts = rawArgs.split(' ');
@@ -416,13 +404,13 @@ Contoh:
     const matchedStatus = validStatuses.find(s => s.toLowerCase() === status?.toLowerCase());
 
     if (!matchedStatus) {
-      return bot.sendMessage(chatId, `Status *${status}* tidak valid! Pilihan: ${validStatuses.join(', ')}`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Status ${status} tidak valid! Pilihan: ${validStatuses.join(', ')}`);
     }
 
     try {
       const task = await getTaskById(orderId);
       if (!task) {
-        return bot.sendMessage(chatId, `Work order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, `Work order ${orderId} tidak ditemukan.`);
       }
 
       const updates = { trackerStatus: matchedStatus };
@@ -432,17 +420,13 @@ Contoh:
       await updateTask(task.id, updates);
 
       const updatedTask = await getTaskById(task.id);
-      return bot.sendMessage(chatId, `Berhasil Memperbarui Order!\n\n${formatTaskMessage(updatedTask)}`, {
-        parse_mode: 'Markdown',
-        ...getTaskActionButtons(updatedTask.id)
-      });
+      return bot.sendMessage(chatId, `Berhasil Memperbarui Order!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
     } catch (err) {
       console.error(err);
       return bot.sendMessage(chatId, `Terjadi kesalahan saat update order: ${err.message}`);
     }
   });
 
-  // Handle Callback Queries
   bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
@@ -465,10 +449,7 @@ Contoh:
       const orderId = data.split(':')[1];
       const task = await getTaskById(orderId);
       if (task) {
-        return bot.sendMessage(chatId, formatTaskMessage(task), {
-          parse_mode: 'Markdown',
-          ...getTaskActionButtons(task.id)
-        });
+        return bot.sendMessage(chatId, formatTaskMessage(task), getTaskActionButtons(task.id));
       }
     }
 
@@ -484,7 +465,7 @@ Contoh:
       try {
         const task = await getTaskById(orderId);
         if (!task) {
-          return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+          return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
         }
 
         await updateTask(task.id, { trackerStatus: newStatus });
@@ -494,14 +475,10 @@ Contoh:
           await bot.editMessageText(`Status diperbarui menjadi ${newStatus}!\n\n${formatTaskMessage(updatedTask)}`, {
             chat_id: chatId,
             message_id: query.message.message_id,
-            parse_mode: 'Markdown',
             ...getTaskActionButtons(updatedTask.id)
           });
         } catch (e) {
-          await bot.sendMessage(chatId, `Status diperbarui menjadi ${newStatus}!\n\n${formatTaskMessage(updatedTask)}`, {
-            parse_mode: 'Markdown',
-            ...getTaskActionButtons(updatedTask.id)
-          });
+          await bot.sendMessage(chatId, `Status diperbarui menjadi ${newStatus}!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
         }
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${err.message}`);
@@ -511,13 +488,13 @@ Contoh:
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `Ketik nama teknisi untuk order \`${orderId}\` di chat ini, atau gunakan perintah:\n\`/updateteknisi ${orderId} NamaTeknisi\``, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Ketik nama teknisi untuk order ${orderId} di chat ini, atau gunakan perintah:\n/updateteknisi ${orderId} NamaTeknisi`);
     }
 
     if (data.startsWith('note:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_note', orderId };
-      return bot.sendMessage(chatId, `Ketik catatan baru untuk order \`${orderId}\` di chat ini:`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Ketik catatan baru untuk order ${orderId} di chat ini:`);
     }
 
     if (data.startsWith('refresh:')) {
@@ -529,7 +506,6 @@ Contoh:
           await bot.editMessageText(formatTaskMessage(task), {
             chat_id: chatId,
             message_id: query.message.message_id,
-            parse_mode: 'Markdown',
             ...getTaskActionButtons(task.id)
           });
         } catch (e) {
@@ -545,17 +521,17 @@ async function handleAssignAndNotifySTO(bot, chatId, orderId) {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
-      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
     }
 
     const taskSTO = task.sto || '';
     if (!taskSTO) {
-      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak memiliki data STO.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order ${orderId} tidak memiliki data STO.`);
     }
 
     const matchedTechs = await getTechniciansBySTO(taskSTO);
     if (matchedTechs.length === 0) {
-      return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar untuk STO *${taskSTO}*.\n\nSilakan daftarkan teknisi STO ${taskSTO} dengan perintah:\n\`/daftar_teknisi ${taskSTO} NamaTeknisi\``, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar untuk STO ${taskSTO}.\n\nSilakan daftarkan teknisi STO ${taskSTO} dengan perintah:\n/daftar_teknisi ${taskSTO} NamaTeknisi`);
     }
 
     const techNames = matchedTechs.map(t => t.name).join(', ');
@@ -568,7 +544,7 @@ async function handleAssignAndNotifySTO(bot, chatId, orderId) {
       try {
         const notifyMsg = `NOTIFIKASI WORK ORDER BARU (STO ${taskSTO})
 
-Order ID: \`${updatedTask.id}\`
+Order ID: ${updatedTask.id}
 Pelanggan: ${updatedTask.customerName || '-'}
 Alamat: ${updatedTask.address || '-'}
 Layanan: ${updatedTask.serviceType || '-'}
@@ -576,29 +552,23 @@ Status: On Progress
 
 Silakan segera ditindaklanjuti!`;
 
-        await bot.sendMessage(tech.chatId, notifyMsg, {
-          parse_mode: 'Markdown',
-          ...getTaskActionButtons(updatedTask.id)
-        });
+        await bot.sendMessage(tech.chatId, notifyMsg, getTaskActionButtons(updatedTask.id));
         notifyResults.push(`- ${tech.name}: BERHASIL TERSAMPALKAN VIA DM`);
       } catch (dmErr) {
         notifyResults.push(`- ${tech.name} (${tech.username || 'ID ' + tech.chatId}): Gagal DM (Teknisi perlu menekan /start di chat pribadi bot)`);
       }
     }
 
-    const resultMsg = `ORDER BERHASIL DI-ASSIGN BERDASARKAN STO *${taskSTO}*!
+    const resultMsg = `ORDER BERHASIL DI-ASSIGN BERDASARKAN STO ${taskSTO}!
 
-Teknisi Ditugaskan: *${techNames}*
+Teknisi Ditugaskan: ${techNames}
 
 Status Notifikasi Telegram:
 ${notifyResults.join('\n')}
 
 ${formatTaskMessage(updatedTask)}`;
 
-    return bot.sendMessage(chatId, resultMsg, {
-      parse_mode: 'Markdown',
-      ...getTaskActionButtons(updatedTask.id)
-    });
+    return bot.sendMessage(chatId, resultMsg, getTaskActionButtons(updatedTask.id));
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal assign STO & Notif: ${err.message}`);
   }
@@ -607,16 +577,13 @@ ${formatTaskMessage(updatedTask)}`;
 // Helpers
 async function handleSearch(bot, chatId, queryStr) {
   try {
-    await bot.sendMessage(chatId, `Mencari order: *${queryStr}*...`, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, `Mencari order: ${queryStr}...`);
     const task = await getTaskById(queryStr);
     if (!task) {
-      return bot.sendMessage(chatId, `Work order dengan kata kunci *"${queryStr}"* tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Work order dengan kata kunci "${queryStr}" tidak ditemukan.`);
     }
 
-    return bot.sendMessage(chatId, formatTaskMessage(task), {
-      parse_mode: 'Markdown',
-      ...getTaskActionButtons(task.id)
-    });
+    return bot.sendMessage(chatId, formatTaskMessage(task), getTaskActionButtons(task.id));
   } catch (err) {
     return bot.sendMessage(chatId, `Error saat pencarian: ${err.message}`);
   }
@@ -642,12 +609,12 @@ async function handleRekap(bot, chatId) {
 
     const text = `REKAPITULASI STATUS WORK ORDER EBIS
     
-Total Order: \`${counts.Total}\`
-Pending: \`${counts.Pending}\`
-On Progress: \`${counts['On Progress']}\`
-Completed: \`${counts.Completed}\`
-Kendala: \`${counts.Kendala}\`
-Cancel: \`${counts.Cancel}\`
+Total Order: ${counts.Total}
+Pending: ${counts.Pending}
+On Progress: ${counts['On Progress']}
+Completed: ${counts.Completed}
+Kendala: ${counts.Kendala}
+Cancel: ${counts.Cancel}
 
 Klik tombol di bawah untuk melihat daftar spesifik:`;
 
@@ -662,10 +629,7 @@ Klik tombol di bawah untuk melihat daftar spesifik:`;
       ]
     ];
 
-    return bot.sendMessage(chatId, text, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard }
-    });
+    return bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard } });
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal mengambil data rekap: ${err.message}`);
   }
@@ -677,7 +641,7 @@ async function handleTaskListByStatus(bot, chatId, status) {
     const filtered = tasks.filter(t => (t.trackerStatus || 'Pending').toLowerCase() === status.toLowerCase());
 
     if (filtered.length === 0) {
-      return bot.sendMessage(chatId, `Tidak ada task dengan status *${status}*.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Tidak ada task dengan status ${status}.`);
     }
 
     const limited = filtered.slice(0, 10);
@@ -685,18 +649,15 @@ async function handleTaskListByStatus(bot, chatId, status) {
 
     const inline_keyboard = [];
     limited.forEach((t, i) => {
-      msgText += `${i + 1}. *${t.order || t.id}* - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n\n`;
+      msgText += `${i + 1}. ${t.order || t.id} - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n\n`;
       inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
     if (filtered.length > 10) {
-      msgText += `_...dan ${filtered.length - 10} order lainnya._`;
+      msgText += `...dan ${filtered.length - 10} order lainnya.`;
     }
 
-    return bot.sendMessage(chatId, msgText, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard }
-    });
+    return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal memuat daftar task: ${err.message}`);
   }
@@ -708,21 +669,18 @@ async function handleSearchTeknisi(bot, chatId, techName) {
     const matched = tasks.filter(t => t.technicianName && t.technicianName.toLowerCase().includes(techName.toLowerCase()));
 
     if (matched.length === 0) {
-      return bot.sendMessage(chatId, `Tidak ada task yang ditugaskan ke teknisi *"${techName}"*.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Tidak ada task yang ditugaskan ke teknisi "${techName}".`);
     }
 
     let msgText = `Task untuk Teknisi "${techName}" (${matched.length} total):\n\n`;
     const inline_keyboard = [];
 
     matched.slice(0, 10).forEach((t, i) => {
-      msgText += `${i + 1}. *${t.order || t.id}* [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n\n`;
+      msgText += `${i + 1}. ${t.order || t.id} [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n\n`;
       inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
-    return bot.sendMessage(chatId, msgText, {
-      parse_mode: 'Markdown',
-      reply_markup: { inline_keyboard }
-    });
+    return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal mencari teknisi: ${err.message}`);
   }
@@ -732,15 +690,12 @@ async function handleAssignTechnician(bot, chatId, orderId, techName) {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
-      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
     }
 
     await updateTask(task.id, { technicianName: techName });
     const updatedTask = await getTaskById(task.id);
-    return bot.sendMessage(chatId, `Teknisi untuk order \`${task.id}\` berhasil diubah menjadi *${techName}*!\n\n${formatTaskMessage(updatedTask)}`, {
-      parse_mode: 'Markdown',
-      ...getTaskActionButtons(updatedTask.id)
-    });
+    return bot.sendMessage(chatId, `Teknisi untuk order ${task.id} berhasil diubah menjadi ${techName}!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal menetapkan teknisi: ${err.message}`);
   }
@@ -750,15 +705,12 @@ async function handleUpdateNote(bot, chatId, orderId, notes) {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
-      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
     }
 
     await updateTask(task.id, { notes });
     const updatedTask = await getTaskById(task.id);
-    return bot.sendMessage(chatId, `Catatan order \`${task.id}\` berhasil diperbarui!\n\n${formatTaskMessage(updatedTask)}`, {
-      parse_mode: 'Markdown',
-      ...getTaskActionButtons(updatedTask.id)
-    });
+    return bot.sendMessage(chatId, `Catatan order ${task.id} berhasil diperbarui!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal memperbarui catatan: ${err.message}`);
   }
