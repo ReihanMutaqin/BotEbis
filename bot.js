@@ -101,6 +101,10 @@ Pendaftaran Teknisi STO:
 2. Daftarkan orang lain:
 /daftar_teknisi JTN Hengky Julio @Tele123
 
+Cek Teknisi STO:
+/list_teknisi [KODE_STO]
+Contoh: /list_teknisi JTN
+
 Hapus Teknisi Terdaftar:
 /hapus_teknisi Hengky Julio`;
 }
@@ -130,6 +134,45 @@ function parseTemplateMessage(text) {
   return data.orderId ? data : null;
 }
 
+function formatTechniciansBySTOList(techs, filterSTO = null) {
+  if (techs.length === 0) {
+    return filterSTO 
+      ? `Belum ada teknisi yang terdaftar untuk STO ${filterSTO.toUpperCase()}.\n\nDaftarkan dengan perintah: /daftar_teknisi ${filterSTO.toUpperCase()} NamaTeknisi @Username`
+      : `Belum ada teknisi yang terdaftar di sistem.\n\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama> [@Username]`;
+  }
+
+  let filtered = techs;
+  if (filterSTO) {
+    filtered = techs.filter(t => t.sto.toUpperCase() === filterSTO.toUpperCase());
+    if (filtered.length === 0) {
+      return `Belum ada teknisi yang terdaftar untuk STO ${filterSTO.toUpperCase()}.\n\nDaftarkan dengan perintah: /daftar_teknisi ${filterSTO.toUpperCase()} NamaTeknisi @Username`;
+    }
+  }
+
+  // Group by STO
+  const grouped = {};
+  filtered.forEach(t => {
+    const stoKey = (t.sto || 'UMUM').toUpperCase();
+    if (!grouped[stoKey]) grouped[stoKey] = [];
+    grouped[stoKey].push(t);
+  });
+
+  let text = filterSTO 
+    ? `DAFTAR TEKNISI TERDAFTAR STO ${filterSTO.toUpperCase()} (${filtered.length} total):\n\n`
+    : `DAFTAR TEKNISI TERDAFTAR PER STO (${filtered.length} total):\n\n`;
+
+  for (const sto in grouped) {
+    text += `STO ${sto}:\n`;
+    grouped[sto].forEach((t, i) => {
+      text += `  ${i + 1}. ${t.name} ${t.username ? '(' + t.username + ')' : '(ID ' + t.chatId + ')'}\n`;
+    });
+    text += `\n`;
+  }
+
+  text += `Petunjuk:\n- Ketik /list_teknisi <STO> untuk filter STO tertentu.\n- Ketik /daftar_teknisi <STO> <Nama> [@Username] untuk mendaftarkan teknisi baru.`;
+  return text;
+}
+
 function setupBotListeners(bot) {
   // Command /start & /help
   bot.onText(/\/start(?:@\w+)?|\/help(?:@\w+)?/, async (msg) => {
@@ -139,8 +182,8 @@ function setupBotListeners(bot) {
 
 Fitur & Perintah Bot:
 - /daftar_teknisi <STO> <Nama_Teknisi> [@Username] - Daftarkan diri sendiri atau orang lain ke STO
+- /list_teknisi [KODE_STO] - Lihat daftar teknisi per STO
 - /hapus_teknisi <Nama_atau_STO> - Hapus pendaftaran teknisi
-- /list_teknisi - Lihat daftar teknisi per STO
 - /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi (Gunakan '-' untuk mengosongkan)
 - /update <order_id> <status> [teknisi] [catatan] - Update status order
 - /cek <nomor_order> - Cek detail work order
@@ -186,7 +229,7 @@ Contoh: /daftar_teknisi JTN Hengky Julio @Tele123`);
     if (lastToken.startsWith('@')) {
       targetUsername = lastToken;
       techName = tokens.slice(1, tokens.length - 1).join(' ');
-      targetChatId = targetUsername; // store username handle for tagging
+      targetChatId = targetUsername;
     } else {
       techName = tokens.slice(1).join(' ');
       targetUsername = msg.from.username ? `@${msg.from.username}` : '';
@@ -205,6 +248,21 @@ STO: ${sto.toUpperCase()}
 Telegram: ${targetUsername || 'ID ' + targetChatId}
 
 Setiap ada order baru di STO ${sto.toUpperCase()}, bot dapat melakukan tag & notifikasi langsung ke ${targetUsername || techName}.`);
+  });
+
+  // Command /list_teknisi [sto] and /list_teknisi_sto [sto]
+  bot.onText(/\/list_teknisi(?:_sto)?(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    const filterSTO = match[1] ? match[1].trim() : null;
+
+    try {
+      const techs = await getAllTechnicians();
+      const text = formatTechniciansBySTOList(techs, filterSTO);
+      return bot.sendMessage(chatId, text);
+    } catch (err) {
+      return bot.sendMessage(chatId, `Gagal mengambil daftar teknisi: ${err.message}`);
+    }
   });
 
   // Command /hapus_teknisi <query>
@@ -231,27 +289,6 @@ Contoh:
       return bot.sendMessage(chatId, `BERHASIL MENGHAPUS TEKNISI!\n\nTeknisi dihapus (${deletedCount}):\n${names}`);
     } catch (err) {
       return bot.sendMessage(chatId, `Gagal menghapus teknisi: ${err.message}`);
-    }
-  });
-
-  // Command /list_teknisi
-  bot.onText(/\/list_teknisi(?:@\w+)?/, async (msg) => {
-    const chatId = msg.chat.id;
-    delete userStates[chatId];
-    try {
-      const techs = await getAllTechnicians();
-      if (techs.length === 0) {
-        return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama>`);
-      }
-
-      let text = `DAFTAR TEKNISI TERDAFTAR PER STO (${techs.length} total):\n\n`;
-      techs.forEach((t, i) => {
-        text += `${i + 1}. ${t.name} (STO: ${t.sto})\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
-      });
-
-      return bot.sendMessage(chatId, text);
-    } catch (err) {
-      return bot.sendMessage(chatId, `Gagal mengambil daftar teknisi: ${err.message}`);
     }
   });
 
@@ -305,14 +342,7 @@ Contoh:
 
       if (text === 'Daftar Teknisi STO') {
         const techs = await getAllTechnicians();
-        if (techs.length === 0) {
-          return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar per STO.\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama>`);
-        }
-
-        let tText = `DAFTAR TEKNISI TERDAFTAR PER STO (${techs.length} total):\n\n`;
-        techs.forEach((t, i) => {
-          tText += `${i + 1}. ${t.name} (STO: ${t.sto})\n   Telegram: ${t.username ? t.username : 'ID ' + t.chatId}\n\n`;
-        });
+        const tText = formatTechniciansBySTOList(techs);
         return bot.sendMessage(chatId, tText);
       }
 
@@ -344,10 +374,12 @@ Contoh:
 1. Pendaftaran STO:
    - Diri sendiri: /daftar_teknisi JTN Hengky Julio
    - Orang lain: /daftar_teknisi JTN Hengky Julio @Tele123
-2. Hapus Teknisi STO: /hapus_teknisi Hengky Julio
-3. Assign & Notif: Klik "Assign & Notif STO" di detail order.
-4. Cek Order: Kirim nomor order (misal: 1001524450)
-5. Hapus Teknisi dari Order: /updateteknisi 1001524450 -
+2. Cek Daftar Teknisi STO:
+   - Semua STO: /list_teknisi
+   - Spesifik STO: /list_teknisi JTN
+3. Hapus Teknisi STO: /hapus_teknisi Hengky Julio
+4. Assign & Notif: Klik "Assign & Notif STO" di detail order.
+5. Cek Order: Kirim nomor order (misal: 1001524450)
 
 Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       }
