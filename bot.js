@@ -42,6 +42,19 @@ function escapeHtml(text) {
     .replace(/>/g, '&gt;');
 }
 
+function extractOrderIdFromText(text) {
+  if (!text) return null;
+  const matchOrder = text.match(/order\s+(?:ID\s+)?(?:<code>)?(\w+)(?:<\/code>)?/i);
+  if (matchOrder && matchOrder[1]) {
+    return matchOrder[1].replace(/[^a-zA-Z0-9_-]/g, '');
+  }
+  const matchNum = text.match(/\b(100\d{7})\b/);
+  if (matchNum) {
+    return matchNum[1];
+  }
+  return null;
+}
+
 function getStatusBadge(status) {
   const st = (status || '').toLowerCase();
   if (st.includes('complete') || st.includes('selesai')) return '<b>Completed</b>';
@@ -638,7 +651,7 @@ function setupBotListeners(bot) {
 
       if (text === 'Cek Work Order') {
         userStates[chatId] = { action: 'awaiting_search' };
-        return bot.sendMessage(chatId, '<b>Silakan kirimkan Nomor Order, No Internet, Nama Pelanggan, atau Kode STO (misal: JTN) yang ingin dicari:</b>', { parse_mode: 'HTML' });
+        return bot.sendMessage(chatId, '<b>Silakan kirimkan Nomor Order, No Internet, Nama Pelanggan, atau Kode STO (misal: JTN) yang ingin dicari:</b>', { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
       }
 
       if (text === 'Rekap Status') {
@@ -655,7 +668,7 @@ function setupBotListeners(bot) {
 
       if (text === 'Cari Teknisi') {
         userStates[chatId] = { action: 'awaiting_teknisi' };
-        return bot.sendMessage(chatId, '<b>Masukkan nama teknisi yang ingin dicari:</b>', { parse_mode: 'HTML' });
+        return bot.sendMessage(chatId, '<b>Masukkan nama teknisi yang ingin dicari:</b>', { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
       }
 
       if (text === 'Bantuan') {
@@ -705,6 +718,45 @@ function setupBotListeners(bot) {
 
     const userId = msg.from ? msg.from.id : '';
     const userKey = `${chatId}_${userId}`;
+    const updatedBy = getSenderTag(msg.from);
+
+    // 1. Check if user is replying to a bot prompt message (Stateless & Vercel Serverless Safe!)
+    if (msg.reply_to_message && msg.reply_to_message.text) {
+      const replyText = msg.reply_to_message.text.toLowerCase();
+      const targetOrderId = extractOrderIdFromText(msg.reply_to_message.text);
+
+      if (targetOrderId) {
+        if (replyText.includes('catatan') || replyText.includes('kendala') || replyText.includes('alasan')) {
+          delete userStates[userKey];
+          delete userStates[chatId];
+          return handleUpdateNote(bot, chatId, targetOrderId, text, updatedBy);
+        }
+
+        if (replyText.includes('teknisi') || replyText.includes('assign')) {
+          delete userStates[userKey];
+          delete userStates[chatId];
+          let tName = text;
+          if (text.toLowerCase() === ':me') {
+            tName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+          } else if (text === '-') {
+            tName = '';
+          }
+          return handleAssignTechnician(bot, chatId, targetOrderId, tName, updatedBy);
+        }
+      }
+
+      if (replyText.includes('pencari') || replyText.includes('nomor order') || replyText.includes('kode sto')) {
+        delete userStates[userKey];
+        delete userStates[chatId];
+        return handleSearch(bot, chatId, text);
+      }
+
+      if (replyText.includes('nama teknisi')) {
+        delete userStates[userKey];
+        delete userStates[chatId];
+        return handleSearchTeknisi(bot, chatId, text);
+      }
+    }
 
     if (userStates[userKey] || userStates[chatId]) {
       const state = userStates[userKey] || userStates[chatId];
@@ -720,10 +772,8 @@ function setupBotListeners(bot) {
         } else if (text === '-') {
           tName = '';
         }
-        const updatedBy = getSenderTag(msg.from);
         return handleAssignTechnician(bot, chatId, state.orderId, tName, updatedBy);
       } else if (state.action === 'awaiting_note') {
-        const updatedBy = getSenderTag(msg.from);
         return handleUpdateNote(bot, chatId, state.orderId, text, updatedBy);
       } else if (state.action === 'awaiting_teknisi') {
         return handleSearchTeknisi(bot, chatId, text);
@@ -861,7 +911,7 @@ function setupBotListeners(bot) {
         if (newStatus.toLowerCase() === 'kendala') {
           userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
           userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\nSilakan ketik alasan / catatan kendala untuk order ini di chat:`, { parse_mode: 'HTML' });
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\nSilakan ketik alasan / catatan kendala untuk order <code>${escapeHtml(task.id)}</code> di chat ini:`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
         }
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
@@ -873,7 +923,7 @@ function setupBotListeners(bot) {
       const userId = query.from ? query.from.id : '';
       userStates[`${chatId}_${userId}`] = { action: 'awaiting_assign', orderId };
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `<b>Ketik nama teknisi untuk order <code>${escapeHtml(orderId)}</code> di chat ini (atau ketik ':me' untuk nama kamu sendiri), atau gunakan perintah:</b>\n<code>/updateteknisi ${escapeHtml(orderId)} :me</code>`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `<b>Ketik nama teknisi untuk order <code>${escapeHtml(orderId)}</code> di chat ini (atau ketik ':me' for nama kamu sendiri), atau gunakan perintah:</b>\n<code>/updateteknisi ${escapeHtml(orderId)} :me</code>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
     }
 
     if (data.startsWith('note:')) {
@@ -881,7 +931,7 @@ function setupBotListeners(bot) {
       const userId = query.from ? query.from.id : '';
       userStates[`${chatId}_${userId}`] = { action: 'awaiting_note', orderId };
       userStates[chatId] = { action: 'awaiting_note', orderId };
-      return bot.sendMessage(chatId, `<b>Ketik catatan baru untuk order <code>${escapeHtml(orderId)}</code> di chat ini:</b>`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `<b>Ketik catatan baru untuk order <code>${escapeHtml(orderId)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
     }
 
     if (data.startsWith('refresh:')) {
