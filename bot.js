@@ -842,6 +842,45 @@ function setupBotListeners(bot) {
     return handleSearch(bot, chatId, queryStr.trim());
   });
 
+  bot.onText(/\/syncsheets(?:@\w+)?|\/sync(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    try {
+      await bot.sendMessage(chatId, '⏳ <b>Memproses sinkronisasi seluruh data ke Google Spreadsheet...</b>', { parse_mode: 'HTML' });
+      const tasks = await getAllTasks();
+      if (!tasks || tasks.length === 0) {
+        return bot.sendMessage(chatId, '⚠️ Tidak ada data order untuk disinkronkan.', { parse_mode: 'HTML' });
+      }
+
+      const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL || 'https://script.google.com/macros/s/AKfycby0jct0vhgp_Z31Zol3LtL-QU63jG8ZkgBRJk2TdSz0cEmyeOmwBxL1jqwcDAc6AecRkA/exec';
+      const payload = tasks.map(task => ({
+        orderId: task.order || task.id,
+        woId: task.woId || '-',
+        nik: task.nik || '-',
+        customerName: task.customerName || '-',
+        sto: task.sto || '-',
+        witel: task.witel || '-',
+        trackerStatus: task.trackerStatus || 'Pending',
+        technicianName: task.technicianName || '-',
+        notes: task.notes || '-',
+        statusResume: task.statusResume || '-',
+        statusMessage: task.statusMessage || '-',
+        updatedAt: task.updatedAt || new Date().toISOString(),
+        updatedBy: task.updatedBy || '-'
+      }));
+
+      await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulkTasks: payload })
+      });
+
+      return bot.sendMessage(chatId, `✅ <b>BERHASIL SINKRONISASI!</b>\n\nSebanyak <b>${tasks.length} order</b> telah di-export & dipisahkan ke masing-masing tab STO di Google Spreadsheet!`, { parse_mode: 'HTML' });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Gagal sync ke Google Sheets: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
+  });
+
   bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
     delete userStates[msg.chat.id];
     return handleRekap(bot, msg.chat.id);
