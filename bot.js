@@ -109,8 +109,9 @@ Perintah Cepat Update:
 2. Pakai Nama Lengkap (Tanda Kutip):
 /update 1002476754 Pending "Hengky Julio" Pending jadwal
 
-3. Set Nama Teknisi Saja:
-/updateteknisi 1002476754 Hengky Julio`;
+3. Cek List Order per STO:
+/cek JTN
+/cek CWA`;
 }
 
 function parseTemplateMessage(text) {
@@ -235,13 +236,13 @@ function setupBotListeners(bot) {
     const text = `Selamat Datang di Bot EBIS Telkom
 
 Fitur & Perintah Bot:
+- /cek <nomor_order_atau_STO> - Cek detail work order atau list order per STO (misal: /cek JTN)
 - /update <order_id> <status> :me <catatan> - Update status & gunakan nama akun Telegram sendiri
 - /update <order_id> <status> "Nama Lengkap" <catatan> - Update status dengan nama lengkap
 - /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
 - /daftar_teknisi <STO> <Nama_Teknisi> [@Username] - Daftarkan diri sendiri atau orang lain ke STO
 - /list_teknisi [KODE_STO] - Lihat daftar teknisi per STO
 - /hapus_teknisi <Nama_atau_STO> - Hapus pendaftaran teknisi
-- /cek <nomor_order> - Cek detail work order
 - /rekap - Lihat ringkasan statistik order
 - /pending - Lihat daftar task pending
 - /kendala - Lihat daftar task kendala
@@ -462,7 +463,7 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
 
       if (text === 'Cek Work Order') {
         userStates[chatId] = { action: 'awaiting_search' };
-        return bot.sendMessage(chatId, 'Silakan kirimkan Nomor Order, No Internet, atau Nama Pelanggan yang ingin dicari:');
+        return bot.sendMessage(chatId, 'Silakan kirimkan Nomor Order, No Internet, Nama Pelanggan, atau Kode STO (misal: JTN) yang ingin dicari:');
       }
 
       if (text === 'Rekap Status') {
@@ -485,13 +486,13 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
       if (text === 'Bantuan') {
         return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
 
-1. Perintah Update :me:
+1. Cek Order per STO:
+   /cek JTN
+   /cek CWA
+2. Perintah Update :me:
    /update 1002476754 Pending :me Pending jadwal
-2. Perintah Update Nama Lengkap:
-   /update 1002476754 Pending "Hengky Julio" Pending jadwal
 3. Pendaftaran STO:
    /daftar_teknisi JTN Hengky Julio @Tele123
-4. Cek Order: Kirim nomor order (misal: 1001524450)
 
 Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       }
@@ -560,12 +561,48 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
       }
     }
 
-    if (text.length >= 3) {
+    if (text.length >= 2) {
       return handleSearch(bot, chatId, text);
     }
   });
 
-  // Handle Callback Queries
+  bot.onText(/\/cek(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    const queryStr = match[1];
+    if (!queryStr) {
+      userStates[chatId] = { action: 'awaiting_search' };
+      return bot.sendMessage(chatId, 'Silakan masukkan Nomor Order, Nama Pelanggan, atau Kode STO (misal: JTN):');
+    }
+    return handleSearch(bot, chatId, queryStr.trim());
+  });
+
+  bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
+    delete userStates[msg.chat.id];
+    return handleRekap(bot, msg.chat.id);
+  });
+
+  bot.onText(/\/pending(?:@\w+)?/, async (msg) => {
+    delete userStates[msg.chat.id];
+    return handleTaskListByStatus(bot, msg.chat.id, 'Pending');
+  });
+
+  bot.onText(/\/kendala(?:@\w+)?/, async (msg) => {
+    delete userStates[msg.chat.id];
+    return handleTaskListByStatus(bot, msg.chat.id, 'Kendala');
+  });
+
+  bot.onText(/\/teknisi(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    const techName = match[1];
+    if (!techName) {
+      userStates[chatId] = { action: 'awaiting_teknisi' };
+      return bot.sendMessage(chatId, 'Masukkan nama teknisi yang ingin dicari:');
+    }
+    return handleSearchTeknisi(bot, chatId, techName.trim());
+  });
+
   bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
@@ -723,16 +760,63 @@ ${formatTaskMessage(updatedTask)}`;
   }
 }
 
-// Helpers
+// Helpers / Search
 async function handleSearch(bot, chatId, queryStr) {
   try {
-    await bot.sendMessage(chatId, `Mencari order: ${queryStr}...`);
-    const task = await getTaskById(queryStr);
-    if (!task) {
-      return bot.sendMessage(chatId, `Work order dengan kata kunci "${queryStr}" tidak ditemukan.`);
+    await bot.sendMessage(chatId, `Mencari data: ${queryStr}...`);
+    const allTasks = await getAllTasks();
+    const qLower = queryStr.toLowerCase();
+
+    // Check exact or partial match on STO
+    const stoMatches = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
+
+    if (stoMatches.length > 0) {
+      const limited = stoMatches.slice(0, 10);
+      let msgText = `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()} (${stoMatches.length} total):\n\n`;
+      const inline_keyboard = [];
+
+      limited.forEach((t, i) => {
+        msgText += `${i + 1}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
+        inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
+      });
+
+      if (stoMatches.length > 10) {
+        msgText += `...dan ${stoMatches.length - 10} order STO ${queryStr.toUpperCase()} lainnya.`;
+      }
+
+      return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
     }
 
-    return bot.sendMessage(chatId, formatTaskMessage(task), getTaskActionButtons(task.id));
+    // Check single item search by ID or Customer Name
+    const singleMatch = await getTaskById(queryStr);
+    if (!singleMatch) {
+      // Check partial match on STO or Witel
+      const partialSto = allTasks.filter(t => 
+        (t.sto && t.sto.toLowerCase().includes(qLower)) ||
+        (t.witel && t.witel.toLowerCase().includes(qLower))
+      );
+
+      if (partialSto.length > 0) {
+        const limited = partialSto.slice(0, 10);
+        let msgText = `DAFTAR WORK ORDER STO/WITEL (${partialSto.length} total):\n\n`;
+        const inline_keyboard = [];
+
+        limited.forEach((t, i) => {
+          msgText += `${i + 1}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
+          inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
+        });
+
+        if (partialSto.length > 10) {
+          msgText += `...dan ${partialSto.length - 10} order lainnya.`;
+        }
+
+        return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+      }
+
+      return bot.sendMessage(chatId, `Work order atau STO "${queryStr}" tidak ditemukan.`);
+    }
+
+    return bot.sendMessage(chatId, formatTaskMessage(singleMatch), getTaskActionButtons(singleMatch.id));
   } catch (err) {
     return bot.sendMessage(chatId, `Error saat pencarian: ${err.message}`);
   }
@@ -798,7 +882,7 @@ async function handleTaskListByStatus(bot, chatId, status) {
 
     const inline_keyboard = [];
     limited.forEach((t, i) => {
-      msgText += `${i + 1}. ${t.order || t.id} - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n\n`;
+      msgText += `${i + 1}. ${t.order || t.id} - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
       inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
@@ -825,7 +909,7 @@ async function handleSearchTeknisi(bot, chatId, techName) {
     const inline_keyboard = [];
 
     matched.slice(0, 10).forEach((t, i) => {
-      msgText += `${i + 1}. ${t.order || t.id} [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n\n`;
+      msgText += `${i + 1}. ${t.order || t.id} [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
       inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
