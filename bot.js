@@ -27,6 +27,13 @@ function isMenuButton(text) {
   return MENU_BUTTONS.includes(text.trim());
 }
 
+function getSenderTag(from) {
+  if (!from) return '-';
+  if (from.username) return `@${from.username}`;
+  const fullName = [from.first_name, from.last_name].filter(Boolean).join(' ');
+  return fullName || `User ${from.id}`;
+}
+
 function formatTaskMessage(task) {
   return `DETAIL WORK ORDER EBIS
   
@@ -40,6 +47,7 @@ Status: ${task.trackerStatus || 'Pending'}
 Teknisi: ${task.technicianName || 'Belum ditugaskan'}
 Catatan: ${task.notes || '-'}
 Status Resume: ${task.statusResume || '-'}
+Di Update Oleh: ${task.updatedBy || '-'}
 Order Date: ${task.orderDate || '-'}
 `;
 }
@@ -376,7 +384,8 @@ Contoh:
       techName = '';
     }
 
-    return handleAssignTechnician(bot, chatId, orderId, techName);
+    const updater = getSenderTag(msg.from);
+    return handleAssignTechnician(bot, chatId, orderId, techName, updater);
   });
 
   // Command /update <order_id> <status> <teknisi> <catatan>
@@ -414,7 +423,11 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
         return bot.sendMessage(chatId, `Work order ${orderId} tidak ditemukan.`);
       }
 
-      const updates = { trackerStatus: matchedStatus };
+      const updatedBy = getSenderTag(msg.from);
+      const updates = { 
+        trackerStatus: matchedStatus,
+        updatedBy: updatedBy
+      };
       if (techName !== undefined && techName !== '') updates.technicianName = techName;
       if (notes) updates.notes = notes;
 
@@ -496,7 +509,9 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
             return bot.sendMessage(chatId, `Order ID ${parsed.orderId} tidak ditemukan di database.`);
           }
 
-          const updates = {};
+          const updatedBy = getSenderTag(msg.from);
+          const updates = { updatedBy };
+
           if (parsed.status) {
             const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
             const matchedStatus = validStatuses.find(s => s.toLowerCase() === parsed.status.toLowerCase());
@@ -512,10 +527,6 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
             }
           }
           if (parsed.notes) updates.notes = parsed.notes;
-
-          if (Object.keys(updates).length === 0) {
-            return bot.sendMessage(chatId, `Tidak ada data yang diperbarui. Pastikan menyantumkan STATUS, TEKNISI, atau CATATAN.`);
-          }
 
           await updateTask(task.id, updates);
           const updatedTask = await getTaskById(task.id);
@@ -539,9 +550,11 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
         } else if (text === '-') {
           tName = '';
         }
-        return handleAssignTechnician(bot, chatId, state.orderId, tName);
+        const updatedBy = getSenderTag(msg.from);
+        return handleAssignTechnician(bot, chatId, state.orderId, tName, updatedBy);
       } else if (state.action === 'awaiting_note') {
-        return handleUpdateNote(bot, chatId, state.orderId, text);
+        const updatedBy = getSenderTag(msg.from);
+        return handleUpdateNote(bot, chatId, state.orderId, text, updatedBy);
       } else if (state.action === 'awaiting_teknisi') {
         return handleSearchTeknisi(bot, chatId, text);
       }
@@ -558,6 +571,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
     const data = query.data;
 
     await bot.answerCallbackQuery(query.id);
+    const updatedBy = getSenderTag(query.from);
 
     if (data === 'show_rekap') {
       delete userStates[chatId];
@@ -582,7 +596,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
     if (data.startsWith('assign_sto_notif:')) {
       delete userStates[chatId];
       const orderId = data.split(':')[1];
-      return handleAssignAndNotifySTO(bot, chatId, orderId);
+      return handleAssignAndNotifySTO(bot, chatId, orderId, updatedBy);
     }
 
     if (data.startsWith('st:')) {
@@ -594,7 +608,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
           return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
         }
 
-        await updateTask(task.id, { trackerStatus: newStatus });
+        await updateTask(task.id, { trackerStatus: newStatus, updatedBy });
         const updatedTask = await getTaskById(task.id);
 
         try {
@@ -614,7 +628,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `Ketik nama teknisi (atau ketik ':me' untuk nama kamu sendiri), atau gunakan perintah:\n/updateteknisi ${orderId} :me`);
+      return bot.sendMessage(chatId, `Ketik nama teknisi untuk order ${orderId} di chat ini (atau ketik ':me' untuk nama kamu sendiri), atau gunakan perintah:\n/updateteknisi ${orderId} :me`);
     }
 
     if (data.startsWith('note:')) {
@@ -643,7 +657,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`);
 }
 
 // Assign & Notify Technician by STO
-async function handleAssignAndNotifySTO(bot, chatId, orderId) {
+async function handleAssignAndNotifySTO(bot, chatId, orderId, updatedBy = '-') {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
@@ -661,7 +675,7 @@ async function handleAssignAndNotifySTO(bot, chatId, orderId) {
     }
 
     const techNames = matchedTechs.map(t => `${t.name} (${t.username || 'NoUsername'})`).join(', ');
-    await updateTask(task.id, { technicianName: techNames, trackerStatus: 'On Progress' });
+    await updateTask(task.id, { technicianName: techNames, trackerStatus: 'On Progress', updatedBy });
 
     const updatedTask = await getTaskById(task.id);
 
@@ -681,6 +695,7 @@ Pelanggan: ${updatedTask.customerName || '-'}
 Alamat: ${updatedTask.address || '-'}
 Layanan: ${updatedTask.serviceType || '-'}
 Status: On Progress
+Di Update Oleh: ${updatedBy}
 
 Silakan segera ditindaklanjuti!`;
 
@@ -820,14 +835,14 @@ async function handleSearchTeknisi(bot, chatId, techName) {
   }
 }
 
-async function handleAssignTechnician(bot, chatId, orderId, techName) {
+async function handleAssignTechnician(bot, chatId, orderId, techName, updatedBy = '-') {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
       return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
     }
 
-    await updateTask(task.id, { technicianName: techName });
+    await updateTask(task.id, { technicianName: techName, updatedBy });
     const updatedTask = await getTaskById(task.id);
     return bot.sendMessage(chatId, `Teknisi untuk order ${task.id} berhasil diubah menjadi ${techName || 'Belum ditugaskan'}!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
   } catch (err) {
@@ -835,14 +850,14 @@ async function handleAssignTechnician(bot, chatId, orderId, techName) {
   }
 }
 
-async function handleUpdateNote(bot, chatId, orderId, notes) {
+async function handleUpdateNote(bot, chatId, orderId, notes, updatedBy = '-') {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
       return bot.sendMessage(chatId, `Order ${orderId} tidak ditemukan.`);
     }
 
-    await updateTask(task.id, { notes });
+    await updateTask(task.id, { notes, updatedBy });
     const updatedTask = await getTaskById(task.id);
     return bot.sendMessage(chatId, `Catatan order ${task.id} berhasil diperbarui!\n\n${formatTaskMessage(updatedTask)}`, getTaskActionButtons(updatedTask.id));
   } catch (err) {
