@@ -24,11 +24,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const COLLECTION_NAME = "ebis_tasks";
+const TASKS_COLLECTION = "ebis_tasks";
+const TECH_COLLECTION = "ebis_technicians";
 
-// Helper functions for tasks
+// Task helpers
 async function getAllTasks() {
-  const querySnapshot = await getDocs(collection(db, COLLECTION_NAME));
+  const querySnapshot = await getDocs(collection(db, TASKS_COLLECTION));
   const tasks = [];
   querySnapshot.forEach((docSnap) => {
     tasks.push({ id: docSnap.id, ...docSnap.data() });
@@ -37,13 +38,12 @@ async function getAllTasks() {
 }
 
 async function getTaskById(orderId) {
-  const docRef = doc(db, COLLECTION_NAME, orderId);
+  const docRef = doc(db, TASKS_COLLECTION, orderId);
   const docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() };
   }
   
-  // Try case-insensitive or substring match across all tasks
   const all = await getAllTasks();
   const found = all.find(t => 
     (t.id && t.id.toLowerCase() === orderId.toLowerCase()) || 
@@ -55,7 +55,7 @@ async function getTaskById(orderId) {
 }
 
 async function updateTask(orderId, updates) {
-  const docRef = doc(db, COLLECTION_NAME, orderId);
+  const docRef = doc(db, TASKS_COLLECTION, orderId);
   await setDoc(docRef, {
     ...updates,
     updatedAt: new Date().toISOString()
@@ -63,10 +63,42 @@ async function updateTask(orderId, updates) {
   return true;
 }
 
+// Technician & STO Mapping helpers
+async function registerTechnician(chatId, username, name, sto) {
+  const docRef = doc(db, TECH_COLLECTION, String(chatId));
+  const techData = {
+    chatId: String(chatId),
+    username: username || '',
+    name: name,
+    sto: sto.toUpperCase().trim(),
+    updatedAt: new Date().toISOString()
+  };
+  await setDoc(docRef, techData, { merge: true });
+  return techData;
+}
+
+async function getAllTechnicians() {
+  const querySnapshot = await getDocs(collection(db, TECH_COLLECTION));
+  const techs = [];
+  querySnapshot.forEach((docSnap) => {
+    techs.push(docSnap.data());
+  });
+  return techs;
+}
+
+async function getTechniciansBySTO(sto) {
+  const all = await getAllTechnicians();
+  return all.filter(t => t.sto.toUpperCase() === sto.toUpperCase());
+}
+
 module.exports = {
   db,
-  COLLECTION_NAME,
+  TASKS_COLLECTION,
+  TECH_COLLECTION,
   getAllTasks,
   getTaskById,
-  updateTask
+  updateTask,
+  registerTechnician,
+  getAllTechnicians,
+  getTechniciansBySTO
 };
