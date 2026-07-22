@@ -55,12 +55,56 @@ async function getTaskById(orderId) {
   return found || null;
 }
 
+const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL || 'https://script.google.com/macros/s/AKfycby0jct0vhgp_Z31Zol3LtL-QU63jG8ZkgBRJk2TdSz0cEmyeOmwBxL1jqwcDAc6AecRkA/exec';
+
+async function syncToGoogleSheets(task) {
+  if (!GOOGLE_SHEET_WEBHOOK_URL || !task) return;
+  try {
+    const payload = JSON.stringify({
+      orderId: task.order || task.id,
+      woId: task.woId || '-',
+      nik: task.nik || '-',
+      customerName: task.customerName || '-',
+      sto: task.sto || '-',
+      witel: task.witel || '-',
+      trackerStatus: task.trackerStatus || 'Pending',
+      technicianName: task.technicianName || '-',
+      notes: task.notes || '-',
+      statusResume: task.statusResume || '-',
+      statusMessage: task.statusMessage || '-',
+      updatedAt: task.updatedAt || new Date().toISOString(),
+      updatedBy: task.updatedBy || '-'
+    });
+
+    if (typeof fetch !== 'undefined') {
+      fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload
+      }).catch(err => console.error('Google Sheets sync error:', err.message));
+    }
+  } catch (err) {
+    console.error('Failed to trigger Google Sheets sync:', err.message);
+  }
+}
+
 async function updateTask(orderId, updates) {
   const docRef = doc(db, TASKS_COLLECTION, orderId);
+  const updatedAt = new Date().toISOString();
   await setDoc(docRef, {
     ...updates,
-    updatedAt: new Date().toISOString()
+    updatedAt: updatedAt
   }, { merge: true });
+
+  try {
+    const updatedSnap = await getDoc(docRef);
+    if (updatedSnap.exists()) {
+      syncToGoogleSheets({ id: updatedSnap.id, ...updatedSnap.data() });
+    }
+  } catch (e) {
+    console.error('Error fetching updated task for Google Sheets sync:', e.message);
+  }
+
   return true;
 }
 
