@@ -66,6 +66,8 @@ function getStatusBadge(status) {
 
 function formatTaskMessage(task) {
   const orderId = escapeHtml(task.order || task.id);
+  const woId = escapeHtml(task.woId || '-');
+  const nik = escapeHtml(task.nik || '-');
   const customer = escapeHtml(task.customerName || '-');
   const address = escapeHtml(task.address || '-');
   const sto = escapeHtml(task.sto || '-');
@@ -83,6 +85,8 @@ function formatTaskMessage(task) {
   return `<b>DETAIL WORK ORDER EBIS</b>
 ─────────────────────────
 <b>Order ID:</b> <code>${orderId}</code>
+<b>WO ID:</b> <code>${woId}</code>
+<b>NIK Teknisi:</b> <code>${nik}</code>
 <b>Pelanggan:</b> ${customer}
 <b>Alamat:</b> ${address}
 <b>STO / Witel:</b> <code>${sto}</code> / <code>${witel}</code>
@@ -204,9 +208,11 @@ function getTemplateGuideText() {
 <i>Salin & isi template di bawah ini:</i>
 
 <code>ORDER: 1001524450
-STATUS: Completed
+WO ID: WO123456
+NIK: 12345678
+STATUS: On Progress
 TEKNISI: Ahmad Fauzi
-CATATAN: Redaman -18dBm, ONT terpasang, internet aktif</code>
+CATATAN: Penarikan kabel OK, proses terminasi</code>
 
 ─────────────────────────
 <b>Perintah Cepat Update:</b>
@@ -235,6 +241,10 @@ function parseTemplateMessage(text) {
 
       if (key === 'ORDER' || key === 'ORDER ID' || key === 'NO ORDER' || key === 'ID') {
         data.orderId = val;
+      } else if (key === 'WO' || key === 'WO ID' || key === 'WOID' || key === 'NO WO') {
+        data.woId = val;
+      } else if (key === 'NIK' || key === 'NIK TEKNISI' || key === 'NIK TEK') {
+        data.nik = val;
       } else if (key === 'STATUS' || key === 'STATUS TRACKER' || key === 'STATE') {
         data.status = val;
       } else if (key === 'TEKNISI' || key === 'NAMA TEKNISI' || key === 'TEK') {
@@ -245,7 +255,7 @@ function parseTemplateMessage(text) {
     }
   });
 
-  return data.orderId ? data : null;
+  return (data.orderId || data.woId || data.nik || data.status || data.technicianName || data.notes) ? data : null;
 }
 
 function parseUpdateCommandArgs(rawArgs, sender) {
@@ -370,6 +380,8 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
   pageTasks.forEach((t, idx) => {
     const orderNum = startIdx + idx + 1;
     const orderId = escapeHtml(t.order || t.id);
+    const woId = escapeHtml(t.woId || '-');
+    const nik = escapeHtml(t.nik || '-');
     const cust = escapeHtml(t.customerName || '-');
     const sto = escapeHtml(t.sto || '-');
     const badge = getStatusBadge(t.trackerStatus);
@@ -381,6 +393,7 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
 
     msgText += `<b>${orderNum}.</b> Order: <code>${orderId}</code>\n` +
       `   Pelanggan: <b>${cust}</b>\n` +
+      `   WO ID: <code>${woId}</code> | NIK: <code>${nik}</code>\n` +
       `   Status: ${badge} | STO: <code>${sto}</code>\n` +
       `   Teknisi: <code>${tech}</code>\n` +
       `   Status Resume: ${resume}\n` +
@@ -677,19 +690,28 @@ function setupBotListeners(bot) {
     }
 
     // Template Auto-Parse Check
-    if (text.toUpperCase().includes('ORDER:')) {
+    if (text.toUpperCase().includes('ORDER:') || text.toUpperCase().includes('WO ID:') || text.toUpperCase().includes('WO:') || text.toUpperCase().includes('NIK:')) {
+      delete userStates[userKey];
       delete userStates[chatId];
       const parsed = parseTemplateMessage(text);
-      if (parsed && parsed.orderId) {
+      let targetId = parsed ? (parsed.orderId || extractOrderIdFromText(text)) : null;
+
+      if (msg.reply_to_message && !targetId) {
+        targetId = extractOrderIdFromText(msg.reply_to_message.text);
+      }
+
+      if (parsed && targetId) {
         try {
-          await bot.sendMessage(chatId, `Memproses update dari template untuk order <code>${escapeHtml(parsed.orderId)}</code>...`, { parse_mode: 'HTML' });
-          const task = await getTaskById(parsed.orderId);
+          await bot.sendMessage(chatId, `Memproses update untuk order <code>${escapeHtml(targetId)}</code>...`, { parse_mode: 'HTML' });
+          const task = await getTaskById(targetId);
           if (!task) {
-            return bot.sendMessage(chatId, `Order ID <code>${escapeHtml(parsed.orderId)}</code> tidak ditemukan di database.`, { parse_mode: 'HTML' });
+            return bot.sendMessage(chatId, `Order ID <code>${escapeHtml(targetId)}</code> tidak ditemukan di database.`, { parse_mode: 'HTML' });
           }
 
-          const updatedBy = getSenderTag(msg.from);
           const updates = { updatedBy };
+
+          if (parsed.woId) updates.woId = parsed.woId;
+          if (parsed.nik) updates.nik = parsed.nik;
 
           if (parsed.status) {
             const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
@@ -709,16 +731,12 @@ function setupBotListeners(bot) {
 
           await updateTask(task.id, updates);
           const updatedTask = await getTaskById(task.id);
-          return bot.sendMessage(chatId, `<b>ORDER BERHASIL DIPERBARUI DARI TEMPLATE!</b>\n\n${formatTaskMessage(updatedTask)}`, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
+          return bot.sendMessage(chatId, `<b>ORDER BERHASIL DIPERBARUI!</b>\n\n${formatTaskMessage(updatedTask)}`, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
         } catch (err) {
           return bot.sendMessage(chatId, `Terjadi kesalahan saat memproses template: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
         }
       }
     }
-
-    const userId = msg.from ? msg.from.id : '';
-    const userKey = `${chatId}_${userId}`;
-    const updatedBy = getSenderTag(msg.from);
 
     // 1. Check if user is replying to a bot prompt message (Stateless & Vercel Serverless Safe!)
     if (msg.reply_to_message && msg.reply_to_message.text) {
@@ -912,6 +930,12 @@ function setupBotListeners(bot) {
           userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
           userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
           return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\nSilakan ketik alasan / catatan kendala untuk order <code>${escapeHtml(task.id)}</code> di chat ini:`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+        }
+
+        if (newStatus.toLowerCase() === 'on progress') {
+          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
+          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi On Progress.</b>\n\nSilakan isi WO ID & NIK (atau catatan) untuk order <code>${escapeHtml(task.id)}</code> di chat ini:\n\n<code>WO ID: WO123456\nNIK: 12345678</code>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
         }
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
