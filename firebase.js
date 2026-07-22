@@ -8,6 +8,7 @@ const {
   getDoc, 
   updateDoc, 
   setDoc,
+  deleteDoc,
   query, 
   where 
 } = require('firebase/firestore');
@@ -91,6 +92,24 @@ async function getTechniciansBySTO(sto) {
   return all.filter(t => t.sto.toUpperCase() === sto.toUpperCase());
 }
 
+async function deleteTechnician(queryStr) {
+  const all = await getAllTechnicians();
+  const matched = all.filter(t => 
+    t.name.toLowerCase().includes(queryStr.toLowerCase()) || 
+    t.sto.toLowerCase() === queryStr.toLowerCase() ||
+    (t.username && t.username.toLowerCase().includes(queryStr.toLowerCase())) ||
+    t.chatId === queryStr
+  );
+
+  let deletedCount = 0;
+  for (const t of matched) {
+    const docRef = doc(db, TECH_COLLECTION, String(t.chatId));
+    await deleteDoc(docRef);
+    deletedCount++;
+  }
+  return { deletedCount, matched };
+}
+
 module.exports = {
   db,
   TASKS_COLLECTION,
@@ -100,5 +119,6 @@ module.exports = {
   updateTask,
   registerTechnician,
   getAllTechnicians,
-  getTechniciansBySTO
+  getTechniciansBySTO,
+  deleteTechnician
 };
