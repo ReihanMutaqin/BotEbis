@@ -5,27 +5,19 @@ const { getAllTasks, getTaskById, updateTask } = require('./firebase');
 const userStates = {};
 
 function formatTaskMessage(task) {
-  const statusEmoji = {
-    'Pending': '⏳',
-    'On Progress': '🚀',
-    'Completed': '✅',
-    'Kendala': '⚠️',
-    'Cancel': '❌'
-  }[task.trackerStatus] || '📌';
-
-  return `📋 *DETAIL WORK ORDER EBIS*
+  return `DETAIL WORK ORDER EBIS
   
-🆔 *Order ID*: \`${task.order || task.id}\`
-👤 *Pelanggan*: ${task.customerName || '-'}
-📍 *Alamat*: ${task.address || '-'}
-🏬 *STO / Witel*: ${task.sto || '-'} / ${task.witel || '-'}
-🌐 *No. Internet*: \`${task.internet || '-'}\`
-🛠️ *Layanan*: ${task.serviceType || task.paket || '-'}
-Status: ${statusEmoji} *${task.trackerStatus || 'Pending'}*
-👷 *Teknisi*: ${task.technicianName || '_Belum ditugaskan_'}
-📝 *Catatan*: ${task.notes || '-'}
-ℹ️ *Status Resume*: \`${task.statusResume || '-'}\`
-🕒 *Order Date*: ${task.orderDate || '-'}
+Order ID: \`${task.order || task.id}\`
+Pelanggan: ${task.customerName || '-'}
+Alamat: ${task.address || '-'}
+STO / Witel: ${task.sto || '-'} / ${task.witel || '-'}
+No. Internet: \`${task.internet || '-'}\`
+Layanan: ${task.serviceType || task.paket || '-'}
+Status: *${task.trackerStatus || 'Pending'}*
+Teknisi: ${task.technicianName || '_Belum ditugaskan_'}
+Catatan: ${task.notes || '-'}
+Status Resume: \`${task.statusResume || '-'}\`
+Order Date: ${task.orderDate || '-'}
 `;
 }
 
@@ -34,20 +26,20 @@ function getTaskActionButtons(orderId) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🚀 Set On Progress', callback_data: `st:${orderId}:On Progress` },
-          { text: '✅ Set Completed', callback_data: `st:${orderId}:Completed` }
+          { text: 'Set On Progress', callback_data: `st:${orderId}:On Progress` },
+          { text: 'Set Completed', callback_data: `st:${orderId}:Completed` }
         ],
         [
-          { text: '⚠️ Set Kendala', callback_data: `st:${orderId}:Kendala` },
-          { text: '⏳ Set Pending', callback_data: `st:${orderId}:Pending` }
+          { text: 'Set Kendala', callback_data: `st:${orderId}:Kendala` },
+          { text: 'Set Pending', callback_data: `st:${orderId}:Pending` }
         ],
         [
-          { text: '👨‍🔧 Assign Teknisi', callback_data: `assign:${orderId}` },
-          { text: '📝 Ubah Catatan', callback_data: `note:${orderId}` }
+          { text: 'Assign Teknisi', callback_data: `assign:${orderId}` },
+          { text: 'Ubah Catatan', callback_data: `note:${orderId}` }
         ],
         [
-          { text: '🔄 Refresh Detail', callback_data: `refresh:${orderId}` },
-          { text: '📊 Rekap Utama', callback_data: `show_rekap` }
+          { text: 'Refresh Detail', callback_data: `refresh:${orderId}` },
+          { text: 'Rekap Utama', callback_data: `show_rekap` }
         ]
       ]
     }
@@ -58,10 +50,10 @@ function getMainMenuKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: '🔍 Cek Work Order' }, { text: '📊 Rekap Status' }],
-        [{ text: '⏳ Task Pending' }, { text: '⚠️ Task Kendala' }],
-        [{ text: '👨‍🔧 Cari Teknisi' }, { text: '📋 Template Update' }],
-        [{ text: '💡 Bantuan' }]
+        [{ text: 'Cek Work Order' }, { text: 'Rekap Status' }],
+        [{ text: 'Task Pending' }, { text: 'Task Kendala' }],
+        [{ text: 'Cari Teknisi' }, { text: 'Template Update' }],
+        [{ text: 'Bantuan' }]
       ],
       resize_keyboard: true,
       persistent: true
@@ -69,9 +61,9 @@ function getMainMenuKeyboard() {
   };
 }
 
-// Template generator text
+// Template generator text without icons
 function getTemplateGuideText() {
-  return `📋 *TEMPLATE UPDATE WORK ORDER TEKNISI*
+  return `TEMPLATE UPDATE WORK ORDER TEKNISI
 
 Kamu bisa memperbarui data order secara cepat dengan menyalin & mengisi template di bawah ini:
 
@@ -82,14 +74,14 @@ TEKNISI: Ahmad Fauzi
 CATATAN: Redaman -18dBm, ONT terpasang, internet aktif
 \`\`\`
 
-*Pilihan Status:*
-• \`Completed\` (Selesai Pasang / Perbaikan)
-• \`On Progress\` (Sedang Dikerjakan)
-• \`Kendala\` (Ada Kendala Lapangan)
-• \`Pending\` (Menunggu Teknisi)
-• \`Cancel\` (Batal)
+Pilihan Status:
+- Completed (Selesai Pasang / Perbaikan)
+- On Progress (Sedang Dikerjakan)
+- Kendala (Ada Kendala Lapangan)
+- Pending (Menunggu Teknisi)
+- Cancel (Batal)
 
-💡 *Tips:* Cukup salin teks di atas, ubah datanya, dan kirimkan langsung ke bot ini! Bot akan membaca & memperbarui database secara otomatis.`;
+Tips: Cukup salin teks di atas, ubah datanya, dan kirimkan langsung ke bot ini. Bot akan membaca & memperbarui database secara otomatis.`;
 }
 
 // Template parser helper
@@ -122,19 +114,19 @@ function setupBotListeners(bot) {
   // Command /start & /help
   bot.onText(/\/start|\/help/, async (msg) => {
     const chatId = msg.chat.id;
-    const text = `👋 *Selamat Datang di Bot EBIS Telkom!*
+    const text = `Selamat Datang di Bot EBIS Telkom
 
-Bot ini terhubung langsung secara real-time dengan aplikasi web *EBIS Teknisi*.
+Bot ini terhubung langsung secara real-time dengan aplikasi web EBIS Teknisi.
 
-*Fitur & Perintah Bot:*
-🔹 /template - Dapatkan template update data teknisi
-🔹 /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
-🔹 /update <order_id> <status> [teknisi] [catatan] - Update status order
-🔹 /cek <nomor_order> - Cek detail work order
-🔹 /rekap - Lihat ringkasan statistik order
-🔹 /pending - Lihat daftar task pending
-🔹 /kendala - Lihat daftar task kendala
-🔹 /teknisi <nama> - Cari order berdasarkan nama teknisi
+Fitur & Perintah Bot:
+- /template - Dapatkan template update data teknisi
+- /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
+- /update <order_id> <status> [teknisi] [catatan] - Update status order
+- /cek <nomor_order> - Cek detail work order
+- /rekap - Lihat ringkasan statistik order
+- /pending - Lihat daftar task pending
+- /kendala - Lihat daftar task kendala
+- /teknisi <nama> - Cari order berdasarkan nama teknisi
 
 Gunakan menu di bawah ini untuk akses cepat:`;
 
@@ -154,10 +146,10 @@ Gunakan menu di bawah ini untuk akses cepat:`;
     const chatId = msg.chat.id;
     const rawArgs = match[1];
     if (!rawArgs) {
-      return bot.sendMessage(chatId, `⚠️ *Format Perintah Update Teknisi:*
+      return bot.sendMessage(chatId, `Format Perintah Update Teknisi:
 \`/updateteknisi <order_id> <nama_teknisi>\`
 
-_Contoh:_
+Contoh:
 \`/updateteknisi 1784169110 Ahmad Fauzi\``, { parse_mode: 'Markdown' });
     }
 
@@ -166,7 +158,7 @@ _Contoh:_
     const techName = parts.slice(1).join(' ');
 
     if (!techName) {
-      return bot.sendMessage(chatId, `❌ Silakan masukkan nama teknisi setelah nomor order.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Silakan masukkan nama teknisi setelah nomor order.`);
     }
 
     return handleAssignTechnician(bot, chatId, orderId, techName);
@@ -183,10 +175,10 @@ _Contoh:_
       const parsed = parseTemplateMessage(text);
       if (parsed && parsed.orderId) {
         try {
-          await bot.sendMessage(chatId, `⚙️ Memproses update dari template untuk order \`${parsed.orderId}\`...`, { parse_mode: 'Markdown' });
+          await bot.sendMessage(chatId, `Memproses update dari template untuk order \`${parsed.orderId}\`...`, { parse_mode: 'Markdown' });
           const task = await getTaskById(parsed.orderId);
           if (!task) {
-            return bot.sendMessage(chatId, `❌ Order ID \`${parsed.orderId}\` tidak ditemukan di database.`, { parse_mode: 'Markdown' });
+            return bot.sendMessage(chatId, `Order ID \`${parsed.orderId}\` tidak ditemukan di database.`, { parse_mode: 'Markdown' });
           }
 
           const updates = {};
@@ -199,17 +191,17 @@ _Contoh:_
           if (parsed.notes) updates.notes = parsed.notes;
 
           if (Object.keys(updates).length === 0) {
-            return bot.sendMessage(chatId, `⚠️ Tidak ada data yang diperbarui. Pastikan menyantumkan STATUS, TEKNISI, atau CATATAN.`);
+            return bot.sendMessage(chatId, `Tidak ada data yang diperbarui. Pastikan menyantumkan STATUS, TEKNISI, atau CATATAN.`);
           }
 
           await updateTask(task.id, updates);
           const updatedTask = await getTaskById(task.id);
-          return bot.sendMessage(chatId, `✅ *ORDER BERHASIL DIPERBARUI DARI TEMPLATE!*\n\n${formatTaskMessage(updatedTask)}`, {
+          return bot.sendMessage(chatId, `ORDER BERHASIL DIPERBARUI DARI TEMPLATE!\n\n${formatTaskMessage(updatedTask)}`, {
             parse_mode: 'Markdown',
             ...getTaskActionButtons(updatedTask.id)
           });
         } catch (err) {
-          return bot.sendMessage(chatId, `❌ Terjadi kesalahan saat memproses template: ${err.message}`);
+          return bot.sendMessage(chatId, `Terjadi kesalahan saat memproses template: ${err.message}`);
         }
       }
     }
@@ -230,41 +222,41 @@ _Contoh:_
       }
     }
 
-    if (text === '📋 Template Update') {
+    if (text === 'Template Update') {
       return bot.sendMessage(chatId, getTemplateGuideText(), { parse_mode: 'Markdown' });
     }
 
-    if (text === '🔍 Cek Work Order') {
+    if (text === 'Cek Work Order') {
       userStates[chatId] = { action: 'awaiting_search' };
-      return bot.sendMessage(chatId, '🔍 Silakan kirimkan *Nomor Order*, *No Internet*, atau *Nama Pelanggan* yang ingin dicari:', { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, 'Silakan kirimkan Nomor Order, No Internet, atau Nama Pelanggan yang ingin dicari:');
     }
 
-    if (text === '📊 Rekap Status') {
+    if (text === 'Rekap Status') {
       return handleRekap(bot, chatId);
     }
 
-    if (text === '⏳ Task Pending') {
+    if (text === 'Task Pending') {
       return handleTaskListByStatus(bot, chatId, 'Pending');
     }
 
-    if (text === '⚠️ Task Kendala') {
+    if (text === 'Task Kendala') {
       return handleTaskListByStatus(bot, chatId, 'Kendala');
     }
 
-    if (text === '👨‍🔧 Cari Teknisi') {
+    if (text === 'Cari Teknisi') {
       userStates[chatId] = { action: 'awaiting_teknisi' };
-      return bot.sendMessage(chatId, '👨‍🔧 Masukkan nama teknisi yang ingin dicari:', { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, 'Masukkan nama teknisi yang ingin dicari:');
     }
 
-    if (text === '💡 Bantuan') {
-      return bot.sendMessage(chatId, `💡 *Panduan Penggunaan Bot EBIS Telkom*
+    if (text === 'Bantuan') {
+      return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
 
-1. *Cek Work Order*: Kirimkan nomor order secara langsung di chat (misal: \`17841691101644df\`)
-2. *Template Update*: Salin format dari \`/template\` lalu isi & kirim ke chat ini.
-3. *Update Status*: Klik tombol interaktif pada detail order untuk mengubah status ke *On Progress*, *Completed*, atau *Kendala*.
-4. *Perintah cepat*:
-   • \`/updateteknisi 1784... Nama Teknisi\`
-   • \`/update 1784... Completed Agus "Pekerjaan Selesai"\`
+1. Cek Work Order: Kirimkan nomor order secara langsung di chat (misal: \`17841691101644df\`)
+2. Template Update: Salin format dari /template lalu isi & kirim ke chat ini.
+3. Update Status: Klik tombol interaktif pada detail order untuk mengubah status ke On Progress, Completed, atau Kendala.
+4. Perintah cepat:
+   - /updateteknisi 1784... Nama Teknisi
+   - /update 1784... Completed Agus "Pekerjaan Selesai"
 
 Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' });
     }
@@ -281,7 +273,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
     const queryStr = match[1];
     if (!queryStr) {
       userStates[chatId] = { action: 'awaiting_search' };
-      return bot.sendMessage(chatId, '🔍 Silakan masukkan *Nomor Order* atau *Nama Pelanggan*:', { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, 'Silakan masukkan Nomor Order atau Nama Pelanggan:');
     }
     return handleSearch(bot, chatId, queryStr.trim());
   });
@@ -307,7 +299,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
     const techName = match[1];
     if (!techName) {
       userStates[chatId] = { action: 'awaiting_teknisi' };
-      return bot.sendMessage(chatId, '👨‍🔧 Masukkan nama teknisi yang ingin dicari:', { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, 'Masukkan nama teknisi yang ingin dicari:');
     }
     return handleSearchTeknisi(bot, chatId, techName.trim());
   });
@@ -317,12 +309,12 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
     const chatId = msg.chat.id;
     const rawArgs = match[1];
     if (!rawArgs) {
-      return bot.sendMessage(chatId, `⚠️ *Format Perintah Update:*
+      return bot.sendMessage(chatId, `Format Perintah Update:
 \`/update <order_id> <status> [teknisi] [catatan]\`
 
 Pilihan Status: \`Pending\`, \`On Progress\`, \`Completed\`, \`Kendala\`, \`Cancel\`
 
-_Contoh:_
+Contoh:
 \`/update 1784169110 Completed Budi "Selesai diinstal"\``, { parse_mode: 'Markdown' });
     }
 
@@ -336,13 +328,13 @@ _Contoh:_
     const matchedStatus = validStatuses.find(s => s.toLowerCase() === status?.toLowerCase());
 
     if (!matchedStatus) {
-      return bot.sendMessage(chatId, `❌ Status *${status}* tidak valid! Pilihan: ${validStatuses.join(', ')}`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Status *${status}* tidak valid! Pilihan: ${validStatuses.join(', ')}`, { parse_mode: 'Markdown' });
     }
 
     try {
       const task = await getTaskById(orderId);
       if (!task) {
-        return bot.sendMessage(chatId, `❌ Work order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, `Work order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
       }
 
       const updates = { trackerStatus: matchedStatus };
@@ -352,13 +344,13 @@ _Contoh:_
       await updateTask(task.id, updates);
 
       const updatedTask = await getTaskById(task.id);
-      return bot.sendMessage(chatId, `✅ *Berhasil Memperbarui Order!*\n\n${formatTaskMessage(updatedTask)}`, {
+      return bot.sendMessage(chatId, `Berhasil Memperbarui Order!\n\n${formatTaskMessage(updatedTask)}`, {
         parse_mode: 'Markdown',
         ...getTaskActionButtons(updatedTask.id)
       });
     } catch (err) {
       console.error(err);
-      return bot.sendMessage(chatId, `❌ Terjadi kesalahan saat update order: ${err.message}`);
+      return bot.sendMessage(chatId, `Terjadi kesalahan saat update order: ${err.message}`);
     }
   });
 
@@ -394,40 +386,40 @@ _Contoh:_
       try {
         const task = await getTaskById(orderId);
         if (!task) {
-          return bot.sendMessage(chatId, `❌ Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+          return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
         }
 
         await updateTask(task.id, { trackerStatus: newStatus });
         const updatedTask = await getTaskById(task.id);
 
         try {
-          await bot.editMessageText(`✅ *Status diperbarui menjadi ${newStatus}!*\n\n${formatTaskMessage(updatedTask)}`, {
+          await bot.editMessageText(`Status diperbarui menjadi ${newStatus}!\n\n${formatTaskMessage(updatedTask)}`, {
             chat_id: chatId,
             message_id: query.message.message_id,
             parse_mode: 'Markdown',
             ...getTaskActionButtons(updatedTask.id)
           });
         } catch (e) {
-          await bot.sendMessage(chatId, `✅ *Status diperbarui menjadi ${newStatus}!*\n\n${formatTaskMessage(updatedTask)}`, {
+          await bot.sendMessage(chatId, `Status diperbarui menjadi ${newStatus}!\n\n${formatTaskMessage(updatedTask)}`, {
             parse_mode: 'Markdown',
             ...getTaskActionButtons(updatedTask.id)
           });
         }
       } catch (err) {
-        bot.sendMessage(chatId, `❌ Gagal update: ${err.message}`);
+        bot.sendMessage(chatId, `Gagal update: ${err.message}`);
       }
     }
 
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `👨‍🔧 Masukkan *Nama Teknisi* untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Masukkan Nama Teknisi untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('note:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_note', orderId };
-      return bot.sendMessage(chatId, `📝 Masukkan *Catatan Baru* untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Masukkan Catatan Baru untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('refresh:')) {
@@ -452,10 +444,10 @@ _Contoh:_
 // Helper Implementations
 async function handleSearch(bot, chatId, queryStr) {
   try {
-    await bot.sendMessage(chatId, `🔎 Mencari order: *${queryStr}*...`, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, `Mencari order: *${queryStr}*...`, { parse_mode: 'Markdown' });
     const task = await getTaskById(queryStr);
     if (!task) {
-      return bot.sendMessage(chatId, `❌ Work order dengan kata kunci *"${queryStr}"* tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Work order dengan kata kunci *"${queryStr}"* tidak ditemukan.`, { parse_mode: 'Markdown' });
     }
 
     return bot.sendMessage(chatId, formatTaskMessage(task), {
@@ -463,7 +455,7 @@ async function handleSearch(bot, chatId, queryStr) {
       ...getTaskActionButtons(task.id)
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Error saat pencarian: ${err.message}`);
+    return bot.sendMessage(chatId, `Error saat pencarian: ${err.message}`);
   }
 }
 
@@ -485,25 +477,25 @@ async function handleRekap(bot, chatId) {
       else counts.Pending++;
     });
 
-    const text = `📊 *REKAPITULASI STATUS WORK ORDER EBIS*
+    const text = `REKAPITULASI STATUS WORK ORDER EBIS
     
-📦 *Total Order*: \`${counts.Total}\`
-⏳ *Pending*: \`${counts.Pending}\`
-🚀 *On Progress*: \`${counts['On Progress']}\`
-✅ *Completed*: \`${counts.Completed}\`
-⚠️ *Kendala*: \`${counts.Kendala}\`
-❌ *Cancel*: \`${counts.Cancel}\`
+Total Order: \`${counts.Total}\`
+Pending: \`${counts.Pending}\`
+On Progress: \`${counts['On Progress']}\`
+Completed: \`${counts.Completed}\`
+Kendala: \`${counts.Kendala}\`
+Cancel: \`${counts.Cancel}\`
 
 Klik tombol di bawah untuk melihat daftar spesifik:`;
 
     const inline_keyboard = [
       [
-        { text: `⏳ Pending (${counts.Pending})`, callback_data: 'filter_st:Pending' },
-        { text: `🚀 Progress (${counts['On Progress']})`, callback_data: 'filter_st:On Progress' }
+        { text: `Pending (${counts.Pending})`, callback_data: 'filter_st:Pending' },
+        { text: `Progress (${counts['On Progress']})`, callback_data: 'filter_st:On Progress' }
       ],
       [
-        { text: `⚠️ Kendala (${counts.Kendala})`, callback_data: 'filter_st:Kendala' },
-        { text: `✅ Completed (${counts.Completed})`, callback_data: 'filter_st:Completed' }
+        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Kendala' },
+        { text: `Completed (${counts.Completed})`, callback_data: 'filter_st:Completed' }
       ]
     ];
 
@@ -512,7 +504,7 @@ Klik tombol di bawah untuk melihat daftar spesifik:`;
       reply_markup: { inline_keyboard }
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Gagal mengambil data rekap: ${err.message}`);
+    return bot.sendMessage(chatId, `Gagal mengambil data rekap: ${err.message}`);
   }
 }
 
@@ -522,16 +514,16 @@ async function handleTaskListByStatus(bot, chatId, status) {
     const filtered = tasks.filter(t => (t.trackerStatus || 'Pending').toLowerCase() === status.toLowerCase());
 
     if (filtered.length === 0) {
-      return bot.sendMessage(chatId, `ℹ️ Tidak ada task dengan status *${status}*.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Tidak ada task dengan status *${status}*.`, { parse_mode: 'Markdown' });
     }
 
     const limited = filtered.slice(0, 10);
-    let msgText = `📋 *Daftar Task Status ${status}* (${filtered.length} total):\n\n`;
+    let msgText = `Daftar Task Status ${status} (${filtered.length} total):\n\n`;
 
     const inline_keyboard = [];
     limited.forEach((t, i) => {
-      msgText += `${i + 1}. *${t.order || t.id}* - ${t.customerName || 'Cust'}\n📍 ${t.sto || '-'}\n\n`;
-      inline_keyboard.push([{ text: `🔎 Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
+      msgText += `${i + 1}. *${t.order || t.id}* - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n\n`;
+      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
     if (filtered.length > 10) {
@@ -543,7 +535,7 @@ async function handleTaskListByStatus(bot, chatId, status) {
       reply_markup: { inline_keyboard }
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Gagal memuat daftar task: ${err.message}`);
+    return bot.sendMessage(chatId, `Gagal memuat daftar task: ${err.message}`);
   }
 }
 
@@ -553,15 +545,15 @@ async function handleSearchTeknisi(bot, chatId, techName) {
     const matched = tasks.filter(t => t.technicianName && t.technicianName.toLowerCase().includes(techName.toLowerCase()));
 
     if (matched.length === 0) {
-      return bot.sendMessage(chatId, `👨‍🔧 Tidak ada task yang ditugaskan ke teknisi *"${techName}"*.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Tidak ada task yang ditugaskan ke teknisi *"${techName}"*.`, { parse_mode: 'Markdown' });
     }
 
-    let msgText = `👨‍🔧 *Task untuk Teknisi "${techName}"* (${matched.length} total):\n\n`;
+    let msgText = `Task untuk Teknisi "${techName}" (${matched.length} total):\n\n`;
     const inline_keyboard = [];
 
     matched.slice(0, 10).forEach((t, i) => {
-      msgText += `${i + 1}. *${t.order || t.id}* [${t.trackerStatus || 'Pending'}]\n👤 ${t.customerName || '-'}\n📍 ${t.address || '-'}\n\n`;
-      inline_keyboard.push([{ text: `🔎 Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
+      msgText += `${i + 1}. *${t.order || t.id}* [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n\n`;
+      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
     return bot.sendMessage(chatId, msgText, {
@@ -569,7 +561,7 @@ async function handleSearchTeknisi(bot, chatId, techName) {
       reply_markup: { inline_keyboard }
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Gagal mencari teknisi: ${err.message}`);
+    return bot.sendMessage(chatId, `Gagal mencari teknisi: ${err.message}`);
   }
 }
 
@@ -577,17 +569,17 @@ async function handleAssignTechnician(bot, chatId, orderId, techName) {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
-      return bot.sendMessage(chatId, `❌ Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
     }
 
     await updateTask(task.id, { technicianName: techName });
     const updatedTask = await getTaskById(task.id);
-    return bot.sendMessage(chatId, `✅ Teknisi untuk order \`${task.id}\` berhasil diubah menjadi *${techName}*!\n\n${formatTaskMessage(updatedTask)}`, {
+    return bot.sendMessage(chatId, `Teknisi untuk order \`${task.id}\` berhasil diubah menjadi *${techName}*!\n\n${formatTaskMessage(updatedTask)}`, {
       parse_mode: 'Markdown',
       ...getTaskActionButtons(updatedTask.id)
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Gagal menetapkan teknisi: ${err.message}`);
+    return bot.sendMessage(chatId, `Gagal menetapkan teknisi: ${err.message}`);
   }
 }
 
@@ -595,17 +587,17 @@ async function handleUpdateNote(bot, chatId, orderId, notes) {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
-      return bot.sendMessage(chatId, `❌ Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Order \`${orderId}\` tidak ditemukan.`, { parse_mode: 'Markdown' });
     }
 
     await updateTask(task.id, { notes });
     const updatedTask = await getTaskById(task.id);
-    return bot.sendMessage(chatId, `✅ Catatan order \`${task.id}\` berhasil diperbarui!\n\n${formatTaskMessage(updatedTask)}`, {
+    return bot.sendMessage(chatId, `Catatan order \`${task.id}\` berhasil diperbarui!\n\n${formatTaskMessage(updatedTask)}`, {
       parse_mode: 'Markdown',
       ...getTaskActionButtons(updatedTask.id)
     });
   } catch (err) {
-    return bot.sendMessage(chatId, `❌ Gagal memperbarui catatan: ${err.message}`);
+    return bot.sendMessage(chatId, `Gagal memperbarui catatan: ${err.message}`);
   }
 }
 
