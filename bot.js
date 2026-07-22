@@ -47,8 +47,9 @@ Status: ${task.trackerStatus || 'Pending'}
 Teknisi: ${task.technicianName || 'Belum ditugaskan'}
 Catatan: ${task.notes || '-'}
 Status Resume: ${task.statusResume || '-'}
+Status Message: ${task.statusMessage || '-'}
+Last Update Status: ${task.orderDate || task.updatedAt || '-'}
 Di Update Oleh: ${task.updatedBy || '-'}
-Order Date: ${task.orderDate || '-'}
 `;
 }
 
@@ -228,13 +229,13 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
   return text;
 }
 
-// Full List Sender Helper (No item truncation, displays ALL items cleanly in chunks if needed)
+// Full List Sender Helper (Includes Status Resume, Status Message, and Last Update Status from orderDate)
 async function sendFullTaskList(bot, chatId, title, tasks) {
   if (!tasks || tasks.length === 0) {
     return bot.sendMessage(chatId, `Tidak ada data work order.`);
   }
 
-  const CHUNK_SIZE = 12;
+  const CHUNK_SIZE = 10;
   const totalPages = Math.ceil(tasks.length / CHUNK_SIZE);
 
   for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
@@ -246,7 +247,7 @@ async function sendFullTaskList(bot, chatId, title, tasks) {
 
     chunk.forEach((t, idx) => {
       const orderNum = i + idx + 1;
-      msgText += `${orderNum}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
+      msgText += `${orderNum}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Status Resume: ${t.statusResume || '-'}\n   Status Message: ${t.statusMessage || '-'}\n   Last Update Status: ${t.orderDate || t.updatedAt || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
       inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
     });
 
