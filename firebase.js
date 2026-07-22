@@ -66,10 +66,13 @@ async function updateTask(orderId, updates) {
 
 // Technician & STO Mapping helpers
 async function registerTechnician(chatId, username, name, sto) {
-  const docRef = doc(db, TECH_COLLECTION, String(chatId));
+  const cleanUsername = username ? (username.startsWith('@') ? username : `@${username}`) : '';
+  const docId = (cleanUsername ? cleanUsername.replace('@', '') : String(chatId)).toLowerCase();
+  
+  const docRef = doc(db, TECH_COLLECTION, docId);
   const techData = {
     chatId: String(chatId),
-    username: username || '',
+    username: cleanUsername,
     name: name,
     sto: sto.toUpperCase().trim(),
     updatedAt: new Date().toISOString()
@@ -103,7 +106,8 @@ async function deleteTechnician(queryStr) {
 
   let deletedCount = 0;
   for (const t of matched) {
-    const docRef = doc(db, TECH_COLLECTION, String(t.chatId));
+    const docId = (t.username ? t.username.replace('@', '') : String(t.chatId)).toLowerCase();
+    const docRef = doc(db, TECH_COLLECTION, docId);
     await deleteDoc(docRef);
     deletedCount++;
   }
