@@ -703,8 +703,12 @@ function setupBotListeners(bot) {
       }
     }
 
-    if (userStates[chatId]) {
-      const state = userStates[chatId];
+    const userId = msg.from ? msg.from.id : '';
+    const userKey = `${chatId}_${userId}`;
+
+    if (userStates[userKey] || userStates[chatId]) {
+      const state = userStates[userKey] || userStates[chatId];
+      delete userStates[userKey];
       delete userStates[chatId];
 
       if (state.action === 'awaiting_search') {
@@ -826,8 +830,12 @@ function setupBotListeners(bot) {
     }
 
     if (data.startsWith('st:')) {
-      delete userStates[chatId];
       const [, orderId, newStatus] = data.split(':');
+      const userId = query.from ? query.from.id : '';
+      const stateKey = `${chatId}_${userId}`;
+      delete userStates[chatId];
+      delete userStates[stateKey];
+
       try {
         const task = await getTaskById(orderId);
         if (!task) {
@@ -849,6 +857,12 @@ function setupBotListeners(bot) {
         } catch (e) {
           await bot.sendMessage(chatId, updateText, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
         }
+
+        if (newStatus.toLowerCase() === 'kendala') {
+          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
+          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\nSilakan ketik alasan / catatan kendala untuk order ini di chat:`, { parse_mode: 'HTML' });
+        }
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
       }
@@ -856,12 +870,16 @@ function setupBotListeners(bot) {
 
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
+      const userId = query.from ? query.from.id : '';
+      userStates[`${chatId}_${userId}`] = { action: 'awaiting_assign', orderId };
       userStates[chatId] = { action: 'awaiting_assign', orderId };
       return bot.sendMessage(chatId, `<b>Ketik nama teknisi untuk order <code>${escapeHtml(orderId)}</code> di chat ini (atau ketik ':me' untuk nama kamu sendiri), atau gunakan perintah:</b>\n<code>/updateteknisi ${escapeHtml(orderId)} :me</code>`, { parse_mode: 'HTML' });
     }
 
     if (data.startsWith('note:')) {
       const orderId = data.split(':')[1];
+      const userId = query.from ? query.from.id : '';
+      userStates[`${chatId}_${userId}`] = { action: 'awaiting_note', orderId };
       userStates[chatId] = { action: 'awaiting_note', orderId };
       return bot.sendMessage(chatId, `<b>Ketik catatan baru untuk order <code>${escapeHtml(orderId)}</code> di chat ini:</b>`, { parse_mode: 'HTML' });
     }
