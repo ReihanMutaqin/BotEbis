@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
-const { 
-  getAllTasks, 
-  getTaskById, 
+const {
+  getAllTasks,
+  getTaskById,
   updateTask,
   registerTechnician,
   getAllTechnicians,
@@ -123,13 +123,13 @@ function getFullHelpText() {
   Pilihan Status: Pending, On Progress, Completed, Kendala, Cancel
   Contoh:
     /update 1002476754 Pending :me Pending jadwal
-    /update 1002476754 Pending "Hengky Julio" ONT OK
+    /update 1002476754 Pending "Nama Kalian" ONT OK
 
 - /updateteknisi <order_id> <nama_teknisi_atau_:me>
   Khusus memperbarui nama teknisi (Gunakan '-' untuk mengosongkan).
   Contoh:
     /updateteknisi 1002476754 :me
-    /updateteknisi 1002476754 Hengky Julio
+    /updateteknisi 1002476754 Nama Kalian
 
 - /template
   Dapatkan format template copy-paste laporan update order.
@@ -138,8 +138,8 @@ function getFullHelpText() {
 - /daftar_teknisi <STO> <Nama_Teknisi> [@Username]
   Daftarkan diri sendiri atau akun Telegram orang lain ke STO.
   Contoh:
-    /daftar_teknisi JTN Hengky Julio
-    /daftar_teknisi JTN Hengky Julio @Tele123
+    /daftar_teknisi JTN Nama Kalian
+    /daftar_teknisi JTN Nama Kalian @Tele123
 
 - /list_teknisi [KODE_STO]
   Lihat daftar teknisi terdaftar (semua STO atau spesifik per STO).
@@ -150,7 +150,7 @@ function getFullHelpText() {
 - /hapus_teknisi <Nama_Teknisi_atau_KODE_STO>
   Hapus pendaftaran teknisi dari sistem.
   Contoh:
-    /hapus_teknisi Hengky Julio
+    /hapus_teknisi Nama Kalian
     /hapus_teknisi JTN
 
 ⚙️ LAINNYA:
@@ -173,7 +173,7 @@ Perintah Cepat Update:
 /update 1002476754 Pending :me Pending jadwal
 
 2. Pakai Nama Lengkap (Tanda Kutip):
-/update 1002476754 Pending "Hengky Julio" Pending jadwal
+/update 1002476754 Pending "Nama Kalian" Pending jadwal
 
 3. Cek Full List Order per STO:
 /cek JTN
@@ -212,12 +212,12 @@ function parseUpdateCommandArgs(rawArgs, sender) {
   const firstSpace = trimmed.indexOf(' ');
   if (firstSpace === -1) return null;
   const orderId = trimmed.substring(0, firstSpace).trim();
-  
+
   const remainder1 = trimmed.substring(firstSpace + 1).trim();
   const secondSpace = remainder1.indexOf(' ');
   let status = remainder1;
   let remainder2 = '';
-  
+
   if (secondSpace !== -1) {
     status = remainder1.substring(0, secondSpace).trim();
     remainder2 = remainder1.substring(secondSpace + 1).trim();
@@ -260,7 +260,7 @@ function parseUpdateCommandArgs(rawArgs, sender) {
 
 function formatTechniciansBySTOList(techs, filterSTO = null) {
   if (techs.length === 0) {
-    return filterSTO 
+    return filterSTO
       ? `Belum ada teknisi yang terdaftar untuk STO ${filterSTO.toUpperCase()}.\n\nDaftarkan dengan perintah: /daftar_teknisi ${filterSTO.toUpperCase()} NamaTeknisi @Username`
       : `Belum ada teknisi yang terdaftar di sistem.\n\nDaftarkan dengan perintah: /daftar_teknisi <STO> <Nama> [@Username]`;
   }
@@ -280,7 +280,7 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
     grouped[stoKey].push(t);
   });
 
-  let text = filterSTO 
+  let text = filterSTO
     ? `DAFTAR TEKNISI TERDAFTAR STO ${filterSTO.toUpperCase()} (${filtered.length} total):\n\n`
     : `DAFTAR TEKNISI TERDAFTAR PER STO (${filtered.length} total):\n\n`;
 
@@ -308,7 +308,7 @@ async function sendFullTaskList(bot, chatId, title, tasks) {
   for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
     const chunk = tasks.slice(i, i + CHUNK_SIZE);
     const currentPage = Math.floor(i / CHUNK_SIZE) + 1;
-    
+
     let msgText = `${title}${totalPages > 1 ? ` (Hal ${currentPage}/${totalPages})` : ''} - Total ${tasks.length} Order:\n\n`;
     const inline_keyboard = [];
 
@@ -346,11 +346,11 @@ function setupBotListeners(bot) {
 
 1. Daftarkan diri sendiri:
 /daftar_teknisi <STO> <Nama_Teknisi>
-Contoh: /daftar_teknisi JTN Hengky Julio
+Contoh: /daftar_teknisi JTN Nama Kalian
 
 2. Daftarkan akun Telegram orang lain:
 /daftar_teknisi <STO> <Nama_Teknisi> <@Username_Telegram>
-Contoh: /daftar_teknisi JTN Hengky Julio @Tele123`);
+Contoh: /daftar_teknisi JTN Nama Kalian @Tele123`);
     }
 
     const tokens = rawArgs.trim().split(/\s+/);
@@ -414,7 +414,7 @@ Setiap ada order baru di STO ${sto.toUpperCase()}, bot dapat melakukan tag & not
 /hapus_teknisi <Nama_Teknisi_atau_KODE_STO>
 
 Contoh:
-/hapus_teknisi Hengky Julio
+/hapus_teknisi Nama Kalian
 /hapus_teknisi JTN`);
     }
 
@@ -451,7 +451,7 @@ Gunakan '-' (strip) jika ingin mengosongkan.
 
 Contoh:
 /updateteknisi 1001524450 :me
-/updateteknisi 1001524450 Hengky Julio`);
+/updateteknisi 1001524450 Nama Kalian`);
     }
 
     const parts = rawArgs.split(' ');
@@ -485,7 +485,7 @@ Contoh Pakai :me (Nama Telegram Kamu):
 /update 1002476754 Pending :me Pending jadwal
 
 Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
-/update 1002476754 Pending "Hengky Julio" Pending jadwal`);
+/update 1002476754 Pending "Nama Kalian" Pending jadwal`);
     }
 
     const parsed = parseUpdateCommandArgs(rawArgs, msg.from);
@@ -508,7 +508,7 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
       }
 
       const updatedBy = getSenderTag(msg.from);
-      const updates = { 
+      const updates = {
         trackerStatus: matchedStatus,
         updatedBy: updatedBy
       };
@@ -848,7 +848,7 @@ async function handleSearch(bot, chatId, queryStr) {
 
     const singleMatch = await getTaskById(queryStr);
     if (!singleMatch) {
-      const partialSto = allTasks.filter(t => 
+      const partialSto = allTasks.filter(t =>
         (t.sto && t.sto.toLowerCase().includes(qLower)) ||
         (t.witel && t.witel.toLowerCase().includes(qLower))
       );
