@@ -1,7 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { getAllTasks, getTaskById, updateTask } = require('./firebase');
 
-// User state tracking for multi-step prompts
+// User state tracking for multi-step prompts (tracked per chat ID)
 const userStates = {};
 
 function formatTaskMessage(task) {
@@ -61,14 +61,13 @@ function getMainMenuKeyboard() {
   };
 }
 
-// Template generator text without icons
 function getTemplateGuideText() {
   return `TEMPLATE UPDATE WORK ORDER TEKNISI
 
 Kamu bisa memperbarui data order secara cepat dengan menyalin & mengisi template di bawah ini:
 
 \`\`\`text
-ORDER: 17841691101644df
+ORDER: 1001524450
 STATUS: Completed
 TEKNISI: Ahmad Fauzi
 CATATAN: Redaman -18dBm, ONT terpasang, internet aktif
@@ -81,10 +80,11 @@ Pilihan Status:
 - Pending (Menunggu Teknisi)
 - Cancel (Batal)
 
-Tips: Cukup salin teks di atas, ubah datanya, dan kirimkan langsung ke bot ini. Bot akan membaca & memperbarui database secara otomatis.`;
+Tips di Grup Telegram:
+Salin teks di atas, ubah datanya, dan kirimkan langsung ke grup! Or gunakan perintah cepat:
+/updateteknisi 1001524450 Ahmad Fauzi`;
 }
 
-// Template parser helper
 function parseTemplateMessage(text) {
   const lines = text.split('\n');
   const data = {};
@@ -111,8 +111,8 @@ function parseTemplateMessage(text) {
 }
 
 function setupBotListeners(bot) {
-  // Command /start & /help
-  bot.onText(/\/start|\/help/, async (msg) => {
+  // Regex pattern matching commands with optional @botusername suffix in groups
+  bot.onText(/\/start(?:@\w+)?|\/help(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
     const text = `Selamat Datang di Bot EBIS Telkom
 
@@ -137,12 +137,12 @@ Gunakan menu di bawah ini untuk akses cepat:`;
   });
 
   // Command /template
-  bot.onText(/\/template/, async (msg) => {
+  bot.onText(/\/template(?:@\w+)?/, async (msg) => {
     return bot.sendMessage(msg.chat.id, getTemplateGuideText(), { parse_mode: 'Markdown' });
   });
 
   // Command /updateteknisi <order_id> <nama_teknisi>
-  bot.onText(/\/updateteknisi(?:\s+(.+))?/, async (msg, match) => {
+  bot.onText(/\/updateteknisi(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const rawArgs = match[1];
     if (!rawArgs) {
@@ -150,7 +150,7 @@ Gunakan menu di bawah ini untuk akses cepat:`;
 \`/updateteknisi <order_id> <nama_teknisi>\`
 
 Contoh:
-\`/updateteknisi 1784169110 Ahmad Fauzi\``, { parse_mode: 'Markdown' });
+\`/updateteknisi 1001524450 Ahmad Fauzi\``, { parse_mode: 'Markdown' });
     }
 
     const parts = rawArgs.split(' ');
@@ -170,7 +170,7 @@ Contoh:
     const chatId = msg.chat.id;
     const text = msg.text.trim();
 
-    // Template Auto-Parse Check (If text contains ORDER:)
+    // Template Auto-Parse Check
     if (text.toUpperCase().includes('ORDER:')) {
       const parsed = parseTemplateMessage(text);
       if (parsed && parsed.orderId) {
@@ -206,7 +206,7 @@ Contoh:
       }
     }
 
-    // Check if user is in a state
+    // Check if user is in a state for multi-step input
     if (userStates[chatId]) {
       const state = userStates[chatId];
       delete userStates[chatId];
@@ -251,24 +251,24 @@ Contoh:
     if (text === 'Bantuan') {
       return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
 
-1. Cek Work Order: Kirimkan nomor order secara langsung di chat (misal: \`17841691101644df\`)
+1. Cek Work Order: Kirimkan nomor order secara langsung di chat (misal: \`1001524450\`)
 2. Template Update: Salin format dari /template lalu isi & kirim ke chat ini.
 3. Update Status: Klik tombol interaktif pada detail order untuk mengubah status ke On Progress, Completed, atau Kendala.
-4. Perintah cepat:
-   - /updateteknisi 1784... Nama Teknisi
-   - /update 1784... Completed Agus "Pekerjaan Selesai"
+4. Perintah cepat di Grup:
+   - /updateteknisi 1001524450 Nama Teknisi
+   - /update 1001524450 Completed "Nama" "Pekerjaan Selesai"
 
 Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' });
     }
 
-    // Default text input fallback: attempt to search order directly if text looks like order/name
+    // Default text input fallback: attempt to search order directly if text looks like numeric order or query
     if (text.length >= 3) {
       return handleSearch(bot, chatId, text);
     }
   });
 
   // Command /cek <order_id>
-  bot.onText(/\/cek(?:\s+(.+))?/, async (msg, match) => {
+  bot.onText(/\/cek(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const queryStr = match[1];
     if (!queryStr) {
@@ -279,22 +279,22 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
   });
 
   // Command /rekap
-  bot.onText(/\/rekap|\/status/, async (msg) => {
+  bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
     return handleRekap(bot, msg.chat.id);
   });
 
   // Command /pending
-  bot.onText(/\/pending/, async (msg) => {
+  bot.onText(/\/pending(?:@\w+)?/, async (msg) => {
     return handleTaskListByStatus(bot, msg.chat.id, 'Pending');
   });
 
   // Command /kendala
-  bot.onText(/\/kendala/, async (msg) => {
+  bot.onText(/\/kendala(?:@\w+)?/, async (msg) => {
     return handleTaskListByStatus(bot, msg.chat.id, 'Kendala');
   });
 
   // Command /teknisi <nama>
-  bot.onText(/\/teknisi(?:\s+(.+))?/, async (msg, match) => {
+  bot.onText(/\/teknisi(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const techName = match[1];
     if (!techName) {
@@ -305,7 +305,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
   });
 
   // Command /update <order_id> <status> [teknisi] [catatan]
-  bot.onText(/\/update(?:\s+(.+))?/, async (msg, match) => {
+  bot.onText(/\/update(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     const rawArgs = match[1];
     if (!rawArgs) {
@@ -315,7 +315,7 @@ Untuk bantuan tambahan, hubungi Administrator EBIS.`, { parse_mode: 'Markdown' }
 Pilihan Status: \`Pending\`, \`On Progress\`, \`Completed\`, \`Kendala\`, \`Cancel\`
 
 Contoh:
-\`/update 1784169110 Completed Budi "Selesai diinstal"\``, { parse_mode: 'Markdown' });
+\`/update 1001524450 Completed Budi "Selesai diinstal"\``, { parse_mode: 'Markdown' });
     }
 
     const parts = rawArgs.split(' ');
@@ -413,13 +413,13 @@ Contoh:
     if (data.startsWith('assign:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_assign', orderId };
-      return bot.sendMessage(chatId, `Masukkan Nama Teknisi untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Ketik nama teknisi untuk order \`${orderId}\` di chat ini, atau gunakan perintah:\n\`/updateteknisi ${orderId} NamaTeknisi\``, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('note:')) {
       const orderId = data.split(':')[1];
       userStates[chatId] = { action: 'awaiting_note', orderId };
-      return bot.sendMessage(chatId, `Masukkan Catatan Baru untuk order \`${orderId}\`:`, { parse_mode: 'Markdown' });
+      return bot.sendMessage(chatId, `Ketik catatan baru untuk order \`${orderId}\` di chat ini:`, { parse_mode: 'Markdown' });
     }
 
     if (data.startsWith('refresh:')) {
