@@ -926,16 +926,48 @@ function setupBotListeners(bot) {
           await bot.sendMessage(chatId, updateText, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
         }
 
-        if (newStatus.toLowerCase() === 'kendala') {
+        const stLower = newStatus.toLowerCase();
+
+        if (stLower === 'kendala') {
           userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
           userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\nSilakan ketik alasan / catatan kendala untuk order <code>${escapeHtml(task.id)}</code> di chat ini:`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Kendala.</b>\n\n📝 <b>Silakan ketik alasan / catatan kendala untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
         }
 
-        if (newStatus.toLowerCase() === 'on progress') {
+        if (stLower === 'pending') {
           userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
           userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
-          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi On Progress.</b>\n\nSilakan isi WO ID & NIK (atau catatan) untuk order <code>${escapeHtml(task.id)}</code> di chat ini:\n\n<code>WO ID: WO123456\nNIK: 12345678</code>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Pending.</b>\n\n📝 <b>Silakan ketik alasan / catatan pending untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+        }
+
+        if (stLower === 'completed') {
+          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
+          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
+          const missingFields = [];
+          if (!updatedTask.notes || updatedTask.notes === '-') missingFields.push('CATATAN: Selesai, redaman OK');
+          if (!updatedTask.woId || updatedTask.woId === '-') missingFields.push('WO ID: WO123456');
+          if (!updatedTask.nik || updatedTask.nik === '-') missingFields.push('NIK: 12345678');
+
+          const promptContent = missingFields.length > 0
+            ? `<code>${missingFields.join('\n')}</code>`
+            : `<code>CATATAN: Keterangan hasil pekerjaan...</code>`;
+
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi Completed.</b>\n\n📝 <b>Silakan isi catatan hasil pekerjaan / data yang masih kosong di chat ini:</b>\n\n${promptContent}`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+        }
+
+        if (stLower === 'on progress') {
+          userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
+          userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
+          const missingFields = [];
+          if (!updatedTask.woId || updatedTask.woId === '-') missingFields.push('WO ID: WO123456');
+          if (!updatedTask.nik || updatedTask.nik === '-') missingFields.push('NIK: 12345678');
+          if (!updatedTask.notes || updatedTask.notes === '-') missingFields.push('CATATAN: Penarikan kabel / progres');
+
+          const promptContent = missingFields.length > 0
+            ? `<code>${missingFields.join('\n')}</code>`
+            : `<code>WO ID: WO123456\nNIK: 12345678</code>`;
+
+          return bot.sendMessage(chatId, `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi On Progress.</b>\n\n📝 <b>Silakan lengkapi data WO ID & NIK (atau catatan) untuk order <code>${escapeHtml(task.id)}</code> di chat ini:</b>\n\n${promptContent}`, { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
         }
       } catch (err) {
         bot.sendMessage(chatId, `Gagal update: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
@@ -1180,18 +1212,35 @@ async function handleAssignTechnician(bot, chatId, orderId, techName, updatedBy 
   }
 }
 
-async function handleUpdateNote(bot, chatId, orderId, notes, updatedBy = '-') {
+async function handleUpdateNote(bot, chatId, orderId, notesText, updatedBy = '-') {
   try {
     const task = await getTaskById(orderId);
     if (!task) {
       return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
     }
 
-    await updateTask(task.id, { notes, updatedBy });
+    const updates = { updatedBy };
+    const parsed = parseTemplateMessage(notesText);
+
+    if (parsed && (parsed.woId || parsed.nik || parsed.notes || parsed.technicianName || parsed.status)) {
+      if (parsed.woId) updates.woId = parsed.woId;
+      if (parsed.nik) updates.nik = parsed.nik;
+      if (parsed.notes) updates.notes = parsed.notes;
+      if (parsed.technicianName) updates.technicianName = parsed.technicianName;
+      if (parsed.status) {
+        const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
+        const matchedStatus = validStatuses.find(s => s.toLowerCase() === parsed.status.toLowerCase());
+        if (matchedStatus) updates.trackerStatus = matchedStatus;
+      }
+    } else {
+      updates.notes = notesText;
+    }
+
+    await updateTask(task.id, updates);
     const updatedTask = await getTaskById(task.id);
-    return bot.sendMessage(chatId, `<b>Catatan order <code>${escapeHtml(task.id)}</code> berhasil diperbarui!</b>\n\n${formatTaskMessage(updatedTask)}`, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
+    return bot.sendMessage(chatId, `<b>ORDER <code>${escapeHtml(task.id)}</code> BERHASIL DIPERBARUI!</b>\n\n${formatTaskMessage(updatedTask)}`, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
   } catch (err) {
-    return bot.sendMessage(chatId, `Gagal memperbarui catatan: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    return bot.sendMessage(chatId, `Gagal memperbarui order: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
   }
 }
 
