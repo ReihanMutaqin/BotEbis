@@ -109,7 +109,7 @@ Perintah Cepat Update:
 2. Pakai Nama Lengkap (Tanda Kutip):
 /update 1002476754 Pending "Hengky Julio" Pending jadwal
 
-3. Cek List Order per STO:
+3. Cek Full List Order per STO:
 /cek JTN
 /cek CWA`;
 }
@@ -228,6 +228,32 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
   return text;
 }
 
+// Full List Sender Helper (No item truncation, displays ALL items cleanly in chunks if needed)
+async function sendFullTaskList(bot, chatId, title, tasks) {
+  if (!tasks || tasks.length === 0) {
+    return bot.sendMessage(chatId, `Tidak ada data work order.`);
+  }
+
+  const CHUNK_SIZE = 12;
+  const totalPages = Math.ceil(tasks.length / CHUNK_SIZE);
+
+  for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+    const chunk = tasks.slice(i, i + CHUNK_SIZE);
+    const currentPage = Math.floor(i / CHUNK_SIZE) + 1;
+    
+    let msgText = `${title}${totalPages > 1 ? ` (Hal ${currentPage}/${totalPages})` : ''} - Total ${tasks.length} Order:\n\n`;
+    const inline_keyboard = [];
+
+    chunk.forEach((t, idx) => {
+      const orderNum = i + idx + 1;
+      msgText += `${orderNum}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
+      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
+    });
+
+    await bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+  }
+}
+
 function setupBotListeners(bot) {
   // Command /start & /help
   bot.onText(/\/start(?:@\w+)?|\/help(?:@\w+)?/, async (msg) => {
@@ -236,7 +262,7 @@ function setupBotListeners(bot) {
     const text = `Selamat Datang di Bot EBIS Telkom
 
 Fitur & Perintah Bot:
-- /cek <nomor_order_atau_STO> - Cek detail work order atau list order per STO (misal: /cek JTN)
+- /cek <nomor_order_atau_STO> - Cek detail work order atau list FULL order per STO (misal: /cek JTN)
 - /update <order_id> <status> :me <catatan> - Update status & gunakan nama akun Telegram sendiri
 - /update <order_id> <status> "Nama Lengkap" <catatan> - Update status dengan nama lengkap
 - /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
@@ -486,7 +512,7 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
       if (text === 'Bantuan') {
         return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
 
-1. Cek Order per STO:
+1. Cek FULL Order per STO:
    /cek JTN
    /cek CWA
 2. Perintah Update :me:
@@ -771,20 +797,7 @@ async function handleSearch(bot, chatId, queryStr) {
     const stoMatches = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
 
     if (stoMatches.length > 0) {
-      const limited = stoMatches.slice(0, 10);
-      let msgText = `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()} (${stoMatches.length} total):\n\n`;
-      const inline_keyboard = [];
-
-      limited.forEach((t, i) => {
-        msgText += `${i + 1}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
-        inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
-      });
-
-      if (stoMatches.length > 10) {
-        msgText += `...dan ${stoMatches.length - 10} order STO ${queryStr.toUpperCase()} lainnya.`;
-      }
-
-      return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+      return sendFullTaskList(bot, chatId, `DAFTAR FULL WORK ORDER STO ${queryStr.toUpperCase()}`, stoMatches);
     }
 
     // Check single item search by ID or Customer Name
@@ -797,20 +810,7 @@ async function handleSearch(bot, chatId, queryStr) {
       );
 
       if (partialSto.length > 0) {
-        const limited = partialSto.slice(0, 10);
-        let msgText = `DAFTAR WORK ORDER STO/WITEL (${partialSto.length} total):\n\n`;
-        const inline_keyboard = [];
-
-        limited.forEach((t, i) => {
-          msgText += `${i + 1}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
-          inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
-        });
-
-        if (partialSto.length > 10) {
-          msgText += `...dan ${partialSto.length - 10} order lainnya.`;
-        }
-
-        return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+        return sendFullTaskList(bot, chatId, `DAFTAR FULL WORK ORDER STO/WITEL`, partialSto);
       }
 
       return bot.sendMessage(chatId, `Work order atau STO "${queryStr}" tidak ditemukan.`);
@@ -857,7 +857,7 @@ Klik tombol di bawah untuk melihat daftar spesifik:`;
         { text: `Progress (${counts['On Progress']})`, callback_data: 'filter_st:On Progress' }
       ],
       [
-        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Kendala' },
+        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Completed' },
         { text: `Completed (${counts.Completed})`, callback_data: 'filter_st:Completed' }
       ]
     ];
@@ -877,20 +877,7 @@ async function handleTaskListByStatus(bot, chatId, status) {
       return bot.sendMessage(chatId, `Tidak ada task dengan status ${status}.`);
     }
 
-    const limited = filtered.slice(0, 10);
-    let msgText = `Daftar Task Status ${status} (${filtered.length} total):\n\n`;
-
-    const inline_keyboard = [];
-    limited.forEach((t, i) => {
-      msgText += `${i + 1}. ${t.order || t.id} - ${t.customerName || 'Cust'}\nAlamat/STO: ${t.sto || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
-      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
-    });
-
-    if (filtered.length > 10) {
-      msgText += `...dan ${filtered.length - 10} order lainnya.`;
-    }
-
-    return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+    return sendFullTaskList(bot, chatId, `Daftar Full Task Status ${status}`, filtered);
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal memuat daftar task: ${err.message}`);
   }
@@ -905,15 +892,7 @@ async function handleSearchTeknisi(bot, chatId, techName) {
       return bot.sendMessage(chatId, `Tidak ada task yang ditugaskan ke teknisi "${techName}".`);
     }
 
-    let msgText = `Task untuk Teknisi "${techName}" (${matched.length} total):\n\n`;
-    const inline_keyboard = [];
-
-    matched.slice(0, 10).forEach((t, i) => {
-      msgText += `${i + 1}. ${t.order || t.id} [${t.trackerStatus || 'Pending'}]\nPelanggan: ${t.customerName || '-'}\nAlamat: ${t.address || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
-      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
-    });
-
-    return bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+    return sendFullTaskList(bot, chatId, `Full Task untuk Teknisi "${techName}"`, matched);
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal mencari teknisi: ${err.message}`);
   }
