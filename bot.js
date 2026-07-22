@@ -296,34 +296,78 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
   return text;
 }
 
-// Full List Sender Helper
-async function sendFullTaskList(bot, chatId, title, tasks) {
+// Paginated List Sender Helper (5 items per page with inline edit navigation)
+async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filterType = '', filterQuery = '', messageId = null) {
   if (!tasks || tasks.length === 0) {
-    return bot.sendMessage(chatId, `Tidak ada data work order.`);
+    const emptyMsg = `Tidak ada data work order.`;
+    if (messageId) {
+      return bot.editMessageText(emptyMsg, { chat_id: chatId, message_id: messageId }).catch(() => bot.sendMessage(chatId, emptyMsg));
+    }
+    return bot.sendMessage(chatId, emptyMsg);
   }
 
-  const MAX_LIMIT = 30;
+  const PAGE_SIZE = 5;
   const totalCount = tasks.length;
-  const displayTasks = tasks.slice(0, MAX_LIMIT);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  const CHUNK_SIZE = 10;
-  const totalPages = Math.ceil(displayTasks.length / CHUNK_SIZE);
+  let currentPage = Math.max(1, Math.min(page, totalPages));
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const endIdx = startIdx + PAGE_SIZE;
+  const pageTasks = tasks.slice(startIdx, endIdx);
 
-  for (let i = 0; i < displayTasks.length; i += CHUNK_SIZE) {
-    const chunk = displayTasks.slice(i, i + CHUNK_SIZE);
-    const currentPage = Math.floor(i / CHUNK_SIZE) + 1;
+  let msgText = `📋 ${title}\nHal ${currentPage}/${totalPages} (Total ${totalCount} Order - 5 order/hal):\n\n`;
 
-    const limitInfo = totalCount > MAX_LIMIT ? ` (Maksimal ${MAX_LIMIT} ditampilkan dari ${totalCount})` : ``;
-    let msgText = `${title}${totalPages > 1 ? ` (Hal ${currentPage}/${totalPages})` : ''} - Total ${totalCount} Order${limitInfo}:\n\n`;
-    const inline_keyboard = [];
+  const inline_keyboard = [];
+  let detailRow = [];
 
-    chunk.forEach((t, idx) => {
-      const orderNum = i + idx + 1;
-      msgText += `${orderNum}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Status Resume: ${t.statusResume || '-'}\n   Status Message: ${t.statusMessage || '-'}\n   Last Update Status: ${t.orderDate || t.updatedAt || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
-      inline_keyboard.push([{ text: `Detail ${t.order || t.id}`, callback_data: `view:${t.id}` }]);
-    });
+  pageTasks.forEach((t, idx) => {
+    const orderNum = startIdx + idx + 1;
+    msgText += `${orderNum}. Order: ${t.order || t.id}\n   Pelanggan: ${t.customerName || '-'}\n   Status: ${t.trackerStatus || 'Pending'} | STO: ${t.sto || '-'}\n   Teknisi: ${t.technicianName || '-'}\n   Status Resume: ${t.statusResume || '-'}\n   Status Message: ${t.statusMessage || '-'}\n   Last Update Status: ${t.orderDate || t.updatedAt || '-'}\n   Di Update Oleh: ${t.updatedBy || '-'}\n\n`;
 
-    await bot.sendMessage(chatId, msgText, { reply_markup: { inline_keyboard } });
+    detailRow.push({ text: `🔎 Detail ${t.order || t.id}`, callback_data: `view:${t.id}` });
+    if (detailRow.length === 2) {
+      inline_keyboard.push(detailRow);
+      detailRow = [];
+    }
+  });
+
+  if (detailRow.length > 0) {
+    inline_keyboard.push(detailRow);
+  }
+
+  // Navigation Row: [ ◀️ Prev ] [ 📄 1/24 ] [ Next ▶️ ]
+  if (totalPages > 1 && filterType && filterQuery) {
+    const safeQuery = String(filterQuery).substring(0, 25);
+    const navRow = [];
+
+    if (currentPage > 1) {
+      navRow.push({ text: '◀️ Prev', callback_data: `pg:${filterType}:${safeQuery}:${currentPage - 1}` });
+    } else {
+      navRow.push({ text: '⛔ Prev', callback_data: 'noop' });
+    }
+
+    navRow.push({ text: `📄 ${currentPage}/${totalPages}`, callback_data: 'noop' });
+
+    if (currentPage < totalPages) {
+      navRow.push({ text: 'Next ▶️', callback_data: `pg:${filterType}:${safeQuery}:${currentPage + 1}` });
+    } else {
+      navRow.push({ text: 'Next ⛔', callback_data: 'noop' });
+    }
+
+    inline_keyboard.push(navRow);
+  }
+
+  const options = { reply_markup: { inline_keyboard } };
+
+  if (messageId) {
+    try {
+      return await bot.editMessageText(msgText, { chat_id: chatId, message_id: messageId, ...options });
+    } catch (err) {
+      if (err.message && err.message.includes('message is not modified')) return;
+      return await bot.sendMessage(chatId, msgText, options);
+    }
+  } else {
+    return await bot.sendMessage(chatId, msgText, options);
   }
 }
 
@@ -693,6 +737,30 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
       return handleRekap(bot, chatId);
     }
 
+    if (data === 'noop') {
+      return;
+    }
+
+    if (data.startsWith('pg:')) {
+      delete userStates[chatId];
+      const lastColon = data.lastIndexOf(':');
+      const firstColon = data.indexOf(':');
+      const secondColon = data.indexOf(':', firstColon + 1);
+
+      const fType = data.substring(firstColon + 1, secondColon);
+      const fQuery = data.substring(secondColon + 1, lastColon);
+      const pageNum = parseInt(data.substring(lastColon + 1), 10) || 1;
+      const msgId = query.message.message_id;
+
+      if (fType === 'st') {
+        return handleTaskListByStatus(bot, chatId, fQuery, pageNum, msgId);
+      } else if (fType === 'tek') {
+        return handleSearchTeknisi(bot, chatId, fQuery, pageNum, msgId);
+      } else if (fType === 'sto' || fType === 'q') {
+        return handleSearch(bot, chatId, fQuery, pageNum, msgId);
+      }
+    }
+
     if (data.startsWith('filter_st:')) {
       delete userStates[chatId];
       const status = data.split(':')[1];
@@ -839,33 +907,42 @@ ${formatTaskMessage(updatedTask)}`;
 }
 
 // Helpers / Search
-async function handleSearch(bot, chatId, queryStr) {
+async function handleSearch(bot, chatId, queryStr, page = 1, messageId = null) {
   try {
-    await bot.sendMessage(chatId, `Mencari data: ${queryStr}...`);
+    if (!messageId) {
+      await bot.sendMessage(chatId, `Mencari data: ${queryStr}...`);
+    }
     const allTasks = await getAllTasks();
     const qLower = queryStr.toLowerCase();
 
     const stoMatches = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
 
     if (stoMatches.length > 0) {
-      return sendFullTaskList(bot, chatId, `DAFTAR FULL WORK ORDER STO ${queryStr.toUpperCase()}`, stoMatches);
+      return sendPaginatedTaskList(bot, chatId, `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()}`, stoMatches, page, 'sto', queryStr, messageId);
     }
 
     const singleMatch = await getTaskById(queryStr);
-    if (!singleMatch) {
-      const partialSto = allTasks.filter(t =>
-        (t.sto && t.sto.toLowerCase().includes(qLower)) ||
-        (t.witel && t.witel.toLowerCase().includes(qLower))
-      );
-
-      if (partialSto.length > 0) {
-        return sendFullTaskList(bot, chatId, `DAFTAR FULL WORK ORDER STO/WITEL`, partialSto);
-      }
-
-      return bot.sendMessage(chatId, `Work order atau STO "${queryStr}" tidak ditemukan.`);
+    if (singleMatch) {
+      return bot.sendMessage(chatId, formatTaskMessage(singleMatch), getTaskActionButtons(singleMatch.id));
     }
 
-    return bot.sendMessage(chatId, formatTaskMessage(singleMatch), getTaskActionButtons(singleMatch.id));
+    const partialMatches = allTasks.filter(t =>
+      (t.sto && t.sto.toLowerCase().includes(qLower)) ||
+      (t.witel && t.witel.toLowerCase().includes(qLower)) ||
+      (t.customerName && t.customerName.toLowerCase().includes(qLower)) ||
+      (t.technicianName && t.technicianName.toLowerCase().includes(qLower)) ||
+      (t.internet && String(t.internet).toLowerCase().includes(qLower))
+    );
+
+    if (partialMatches.length > 0) {
+      return sendPaginatedTaskList(bot, chatId, `HASIL PENCARIAN "${queryStr.toUpperCase()}"`, partialMatches, page, 'q', queryStr, messageId);
+    }
+
+    const notFoundMsg = `Work order atau STO "${queryStr}" tidak ditemukan.`;
+    if (messageId) {
+      return bot.editMessageText(notFoundMsg, { chat_id: chatId, message_id: messageId }).catch(() => bot.sendMessage(chatId, notFoundMsg));
+    }
+    return bot.sendMessage(chatId, notFoundMsg);
   } catch (err) {
     return bot.sendMessage(chatId, `Error saat pencarian: ${err.message}`);
   }
@@ -906,7 +983,7 @@ Klik tombol di bawah untuk melihat daftar spesifik:`;
         { text: `Progress (${counts['On Progress']})`, callback_data: 'filter_st:On Progress' }
       ],
       [
-        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Completed' },
+        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Kendala' },
         { text: `Completed (${counts.Completed})`, callback_data: 'filter_st:Completed' }
       ]
     ];
@@ -917,31 +994,39 @@ Klik tombol di bawah untuk melihat daftar spesifik:`;
   }
 }
 
-async function handleTaskListByStatus(bot, chatId, status) {
+async function handleTaskListByStatus(bot, chatId, status, page = 1, messageId = null) {
   try {
     const tasks = await getAllTasks();
     const filtered = tasks.filter(t => (t.trackerStatus || 'Pending').toLowerCase() === status.toLowerCase());
 
     if (filtered.length === 0) {
-      return bot.sendMessage(chatId, `Tidak ada task dengan status ${status}.`);
+      const msg = `Tidak ada task dengan status ${status}.`;
+      if (messageId) {
+        return bot.editMessageText(msg, { chat_id: chatId, message_id: messageId }).catch(() => bot.sendMessage(chatId, msg));
+      }
+      return bot.sendMessage(chatId, msg);
     }
 
-    return sendFullTaskList(bot, chatId, `Daftar Full Task Status ${status}`, filtered);
+    return sendPaginatedTaskList(bot, chatId, `DAFTAR WORK ORDER STATUS ${status.toUpperCase()}`, filtered, page, 'st', status, messageId);
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal memuat daftar task: ${err.message}`);
   }
 }
 
-async function handleSearchTeknisi(bot, chatId, techName) {
+async function handleSearchTeknisi(bot, chatId, techName, page = 1, messageId = null) {
   try {
     const tasks = await getAllTasks();
     const matched = tasks.filter(t => t.technicianName && t.technicianName.toLowerCase().includes(techName.toLowerCase()));
 
     if (matched.length === 0) {
-      return bot.sendMessage(chatId, `Tidak ada task yang ditugaskan ke teknisi "${techName}".`);
+      const msg = `Tidak ada task yang ditugaskan ke teknisi "${techName}".`;
+      if (messageId) {
+        return bot.editMessageText(msg, { chat_id: chatId, message_id: messageId }).catch(() => bot.sendMessage(chatId, msg));
+      }
+      return bot.sendMessage(chatId, msg);
     }
 
-    return sendFullTaskList(bot, chatId, `Full Task untuk Teknisi "${techName}"`, matched);
+    return sendPaginatedTaskList(bot, chatId, `WORK ORDER UNTUK TEKNISI "${techName.toUpperCase()}"`, matched, page, 'tek', techName, messageId);
   } catch (err) {
     return bot.sendMessage(chatId, `Gagal mencari teknisi: ${err.message}`);
   }
