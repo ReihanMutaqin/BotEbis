@@ -854,7 +854,9 @@ function setupBotListeners(bot) {
 
       const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL || 'https://script.google.com/macros/s/AKfycby0jct0vhgp_Z31Zol3LtL-QU63jG8ZkgBRJk2TdSz0cEmyeOmwBxL1jqwcDAc6AecRkA/exec';
       const payload = tasks.map(task => ({
-        orderId: task.order || task.id,
+        orderId: task.order || task.id || '',
+        order: task.order || task.id || '',
+        id: task.id || task.order || '',
         woId: task.woId || '-',
         nik: task.nik || '-',
         customerName: task.customerName || '-',

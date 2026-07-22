@@ -61,7 +61,9 @@ async function syncToGoogleSheets(task) {
   if (!GOOGLE_SHEET_WEBHOOK_URL || !task) return;
   try {
     const payload = JSON.stringify({
-      orderId: task.order || task.id,
+      orderId: task.order || task.id || '',
+      order: task.order || task.id || '',
+      id: task.id || task.order || '',
       woId: task.woId || '-',
       nik: task.nik || '-',
       customerName: task.customerName || '-',
