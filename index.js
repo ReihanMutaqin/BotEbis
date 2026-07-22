@@ -21,17 +21,25 @@ if (isVercel) {
   bot = new TelegramBot(token);
   setupBotListeners(bot);
 
-  app.post(`/api/webhook`, (req, res) => {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
+  app.post(`/api/webhook`, async (req, res) => {
+    try {
+      if (req.body && (req.body.message || req.body.callback_query)) {
+        bot.processUpdate(req.body);
+        // Tahan execution window Vercel selama 1.5 detik agar query Firestore & sendMessage selesai terkirim
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    } catch (err) {
+      console.error('Error processing webhook:', err);
+    }
+    res.status(200).send('OK');
   });
 
   app.get('*', (req, res) => {
     res.send('🤖 EBIS Telegram Bot Webhook Active!');
   });
 } else {
-  // Long Polling Mode untuk Lokal / Server Standar
-  console.log('🤖 EBIS Telegram Bot dimulai dalam mode Polling...');
+  // Long Polling Mode untuk Lokal
+  console.log('🤖 EBIS Telegram Bot dimulai dalam mode Polling (Lokal)...');
   bot = new TelegramBot(token, { polling: true });
   setupBotListeners(bot);
 
