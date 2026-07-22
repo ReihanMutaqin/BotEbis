@@ -93,6 +93,71 @@ function getMainMenuKeyboard() {
   };
 }
 
+function getFullHelpText() {
+  return `DAFTAR LENGKAP PERINTAH (COMMANDS) BOT EBIS TELKOM
+
+🔍 PENCHARIAN & MONITORING WORK ORDER:
+- /cek <order_id | STO | nama_pelanggan>
+  Cek detail order atau tampilkan seluruh list order per STO.
+  Contoh:
+    /cek 1002476754
+    /cek JTN
+    /cek Toko Om Arah
+
+- /rekap atau /status
+  Lihat statistik ringkasan total order (Pending, Progress, Completed, Kendala).
+
+- /pending
+  Tampilkan seluruh daftar work order ber-status Pending.
+
+- /kendala
+  Tampilkan seluruh daftar work order ber-status Kendala.
+
+- /teknisi <nama_teknisi>
+  Cari work order yang ditugaskan ke teknisi tertentu.
+  Contoh: /teknisi Hengky
+
+📝 UPDATE STATUS & DATA WORK ORDER:
+- /update <order_id> <status> <teknisi_atau_:me> <catatan>
+  Update status, teknisi, dan catatan order.
+  Pilihan Status: Pending, On Progress, Completed, Kendala, Cancel
+  Contoh:
+    /update 1002476754 Pending :me Pending jadwal
+    /update 1002476754 Pending "Hengky Julio" ONT OK
+
+- /updateteknisi <order_id> <nama_teknisi_atau_:me>
+  Khusus memperbarui nama teknisi (Gunakan '-' untuk mengosongkan).
+  Contoh:
+    /updateteknisi 1002476754 :me
+    /updateteknisi 1002476754 Hengky Julio
+
+- /template
+  Dapatkan format template copy-paste laporan update order.
+
+👷 PENDAFTARAN & MANAJEMEN TEKNISI PER STO:
+- /daftar_teknisi <STO> <Nama_Teknisi> [@Username]
+  Daftarkan diri sendiri atau akun Telegram orang lain ke STO.
+  Contoh:
+    /daftar_teknisi JTN Hengky Julio
+    /daftar_teknisi JTN Hengky Julio @Tele123
+
+- /list_teknisi [KODE_STO]
+  Lihat daftar teknisi terdaftar (semua STO atau spesifik per STO).
+  Contoh:
+    /list_teknisi
+    /list_teknisi JTN
+
+- /hapus_teknisi <Nama_Teknisi_atau_KODE_STO>
+  Hapus pendaftaran teknisi dari sistem.
+  Contoh:
+    /hapus_teknisi Hengky Julio
+    /hapus_teknisi JTN
+
+⚙️ LAINNYA:
+- /start : Tampilkan menu tombol navigasi utama.
+- /help : Menampilkan daftar lengkap seluruh perintah ini.`;
+}
+
 function getTemplateGuideText() {
   return `TEMPLATE UPDATE WORK ORDER TEKNISI
 
@@ -112,7 +177,9 @@ Perintah Cepat Update:
 
 3. Cek Full List Order per STO:
 /cek JTN
-/cek CWA`;
+/cek CWA
+
+Gunakan /help untuk melihat seluruh daftar perintah lengkap.`;
 }
 
 function parseTemplateMessage(text) {
@@ -229,7 +296,7 @@ function formatTechniciansBySTOList(techs, filterSTO = null) {
   return text;
 }
 
-// Full List Sender Helper (Includes Status Resume, Status Message, and Last Update Status from orderDate)
+// Full List Sender Helper
 async function sendFullTaskList(bot, chatId, title, tasks) {
   if (!tasks || tasks.length === 0) {
     return bot.sendMessage(chatId, `Tidak ada data work order.`);
@@ -257,27 +324,16 @@ async function sendFullTaskList(bot, chatId, title, tasks) {
 
 function setupBotListeners(bot) {
   // Command /start & /help
-  bot.onText(/\/start(?:@\w+)?|\/help(?:@\w+)?/, async (msg) => {
+  bot.onText(/\/start(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
-    const text = `Selamat Datang di Bot EBIS Telkom
+    await bot.sendMessage(chatId, getFullHelpText(), getMainMenuKeyboard());
+  });
 
-Fitur & Perintah Bot:
-- /cek <nomor_order_atau_STO> - Cek detail work order atau list FULL order per STO (misal: /cek JTN)
-- /update <order_id> <status> :me <catatan> - Update status & gunakan nama akun Telegram sendiri
-- /update <order_id> <status> "Nama Lengkap" <catatan> - Update status dengan nama lengkap
-- /updateteknisi <order_id> <nama_teknisi> - Set nama teknisi
-- /daftar_teknisi <STO> <Nama_Teknisi> [@Username] - Daftarkan diri sendiri atau orang lain ke STO
-- /list_teknisi [KODE_STO] - Lihat daftar teknisi per STO
-- /hapus_teknisi <Nama_atau_STO> - Hapus pendaftaran teknisi
-- /rekap - Lihat ringkasan statistik order
-- /pending - Lihat daftar task pending
-- /kendala - Lihat daftar task kendala
-- /template - Dapatkan template update data
-
-Gunakan menu di bawah ini untuk akses cepat:`;
-
-    await bot.sendMessage(chatId, text, getMainMenuKeyboard());
+  bot.onText(/\/help(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    await bot.sendMessage(chatId, getFullHelpText());
   });
 
   // Command /daftar_teknisi <sto> <nama> [@username]
@@ -511,17 +567,7 @@ Contoh Pakai Nama Lengkap (Gunakan Tanda Kutip):
       }
 
       if (text === 'Bantuan') {
-        return bot.sendMessage(chatId, `Panduan Penggunaan Bot EBIS Telkom
-
-1. Cek FULL Order per STO:
-   /cek JTN
-   /cek CWA
-2. Perintah Update :me:
-   /update 1002476754 Pending :me Pending jadwal
-3. Pendaftaran STO:
-   /daftar_teknisi JTN Hengky Julio @Tele123
-
-Untuk bantuan tambahan, hubungi Administrator EBIS.`);
+        return bot.sendMessage(chatId, getFullHelpText());
       }
     }
 
@@ -794,17 +840,14 @@ async function handleSearch(bot, chatId, queryStr) {
     const allTasks = await getAllTasks();
     const qLower = queryStr.toLowerCase();
 
-    // Check exact or partial match on STO
     const stoMatches = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
 
     if (stoMatches.length > 0) {
       return sendFullTaskList(bot, chatId, `DAFTAR FULL WORK ORDER STO ${queryStr.toUpperCase()}`, stoMatches);
     }
 
-    // Check single item search by ID or Customer Name
     const singleMatch = await getTaskById(queryStr);
     if (!singleMatch) {
-      // Check partial match on STO or Witel
       const partialSto = allTasks.filter(t => 
         (t.sto && t.sto.toLowerCase().includes(qLower)) ||
         (t.witel && t.witel.toLowerCase().includes(qLower))
