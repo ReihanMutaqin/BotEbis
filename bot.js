@@ -302,14 +302,19 @@ async function sendFullTaskList(bot, chatId, title, tasks) {
     return bot.sendMessage(chatId, `Tidak ada data work order.`);
   }
 
-  const CHUNK_SIZE = 10;
-  const totalPages = Math.ceil(tasks.length / CHUNK_SIZE);
+  const MAX_LIMIT = 30;
+  const totalCount = tasks.length;
+  const displayTasks = tasks.slice(0, MAX_LIMIT);
 
-  for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
-    const chunk = tasks.slice(i, i + CHUNK_SIZE);
+  const CHUNK_SIZE = 10;
+  const totalPages = Math.ceil(displayTasks.length / CHUNK_SIZE);
+
+  for (let i = 0; i < displayTasks.length; i += CHUNK_SIZE) {
+    const chunk = displayTasks.slice(i, i + CHUNK_SIZE);
     const currentPage = Math.floor(i / CHUNK_SIZE) + 1;
 
-    let msgText = `${title}${totalPages > 1 ? ` (Hal ${currentPage}/${totalPages})` : ''} - Total ${tasks.length} Order:\n\n`;
+    const limitInfo = totalCount > MAX_LIMIT ? ` (Maksimal ${MAX_LIMIT} ditampilkan dari ${totalCount})` : ``;
+    let msgText = `${title}${totalPages > 1 ? ` (Hal ${currentPage}/${totalPages})` : ''} - Total ${totalCount} Order${limitInfo}:\n\n`;
     const inline_keyboard = [];
 
     chunk.forEach((t, idx) => {
