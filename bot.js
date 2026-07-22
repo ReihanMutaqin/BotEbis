@@ -1,3 +1,4 @@
+// Sync update with EBIS Web App v2
 const TelegramBot = require('node-telegram-bot-api');
 const {
   getAllTasks,
