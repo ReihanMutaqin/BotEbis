@@ -361,13 +361,19 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
     const sto = escapeHtml(t.sto || '-');
     const badge = getStatusBadge(t.trackerStatus);
     const tech = escapeHtml(t.technicianName || '-');
+    const resume = escapeHtml(t.statusResume || '-');
+    const statusMsg = escapeHtml(t.statusMessage || '-');
     const lastUpd = escapeHtml(t.orderDate || t.updatedAt || '-');
     const upBy = escapeHtml(t.updatedBy || '-');
 
-    msgText += `<b>${orderNum}.</b> Order: <code>${orderId}</code> - <b>${cust}</b>\n` +
+    msgText += `<b>${orderNum}.</b> Order: <code>${orderId}</code>\n` +
+      `   Pelanggan: <b>${cust}</b>\n` +
       `   Status: ${badge} | STO: <code>${sto}</code>\n` +
       `   Teknisi: <code>${tech}</code>\n` +
-      `   Update: <i>${lastUpd}</i> (${upBy})\n\n`;
+      `   Status Resume: ${resume}\n` +
+      `   Status Message: ${statusMsg}\n` +
+      `   Last Update Status: <i>${lastUpd}</i>\n` +
+      `   Di Update Oleh: ${upBy}\n\n`;
 
     detailRow.push({ text: `Detail ${orderId}`, callback_data: `view:${t.id}` });
     if (detailRow.length === 2) {
