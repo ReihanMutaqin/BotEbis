@@ -176,6 +176,21 @@ async function saveChatUser(chatId, from) {
       name: name,
       lastSeen: new Date().toISOString()
     }, { merge: true });
+
+    // Auto-link numeric chatId to ebis_technicians if username matches
+    if (from?.username) {
+      const cleanUser = from.username.trim().toLowerCase();
+      const techSnap = await getDocs(collection(db, TECH_COLLECTION));
+      techSnap.forEach(async (d) => {
+        const data = d.data();
+        const techUser = data.username ? String(data.username).replace(/^@/, '').trim().toLowerCase() : '';
+        if (techUser === cleanUser && String(data.chatId || '') !== String(chatId)) {
+          try {
+            await setDoc(doc(db, TECH_COLLECTION, d.id), { chatId: String(chatId) }, { merge: true });
+          } catch (err) {}
+        }
+      });
+    }
   } catch (e) {
     console.error("Failed to save chat user:", e.message);
   }
@@ -200,40 +215,58 @@ async function setUserWitel(chatId, witel) {
 
 async function getAllRecipientProfiles() {
   const profilesMap = new Map();
+  const usernameToTech = new Map();
 
   try {
     const techs = await getAllTechnicians();
     techs.forEach(t => {
-      if (t.chatId) {
-        profilesMap.set(String(t.chatId), {
-          chatId: String(t.chatId),
-          name: t.name,
-          username: t.username,
-          sto: (t.sto || '').toUpperCase().trim(),
-          witel: (t.witel || '').toUpperCase().trim()
-        });
+      const cleanUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+      const rawChatId = t.chatId ? String(t.chatId).trim() : '';
+
+      const techObj = {
+        chatId: /^\d+$/.test(rawChatId) ? rawChatId : '',
+        name: t.name || '',
+        username: cleanUser ? `@${cleanUser}` : (t.username || ''),
+        sto: (t.sto || '').toUpperCase().trim(),
+        witel: (t.witel || '').toUpperCase().trim()
+      };
+
+      if (techObj.chatId) {
+        profilesMap.set(techObj.chatId, techObj);
+      }
+      if (cleanUser) {
+        usernameToTech.set(cleanUser, techObj);
       }
     });
 
     const querySnapshot = await getDocs(collection(db, CHATS_COLLECTION));
     querySnapshot.forEach(docSnap => {
       const data = docSnap.data();
-      if (data.chatId) {
-        const existing = profilesMap.get(String(data.chatId)) || {};
-        profilesMap.set(String(data.chatId), {
-          chatId: String(data.chatId),
-          name: data.name || existing.name,
-          username: data.username || existing.username,
-          sto: data.sto || existing.sto || '',
-          witel: data.witel || existing.witel || ''
-        });
+      const rawChatId = data.chatId ? String(data.chatId).trim() : '';
+      if (!/^\d+$/.test(rawChatId)) return;
+
+      const cleanUser = data.username ? String(data.username).replace(/^@/, '').trim().toLowerCase() : '';
+
+      let existing = profilesMap.get(rawChatId);
+      if (!existing && cleanUser && usernameToTech.has(cleanUser)) {
+        existing = usernameToTech.get(cleanUser);
       }
+
+      const mergedProfile = {
+        chatId: rawChatId,
+        name: data.name || existing?.name || '',
+        username: data.username || existing?.username || '',
+        sto: existing?.sto || (data.sto || '').toUpperCase().trim(),
+        witel: data.witel || existing?.witel || ''
+      };
+
+      profilesMap.set(rawChatId, mergedProfile);
     });
   } catch (e) {
     console.error('Error fetching recipient profiles:', e.message);
   }
 
-  return Array.from(profilesMap.values());
+  return Array.from(profilesMap.values()).filter(p => /^\d+$/.test(p.chatId));
 }
 
 async function getAllRecipientChatIds() {
