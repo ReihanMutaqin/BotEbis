@@ -510,6 +510,16 @@ function setupBotListeners(bot) {
     await bot.sendMessage(chatId, getFullHelpText(), { parse_mode: 'HTML', ...getMainMenuKeyboard() });
   });
 
+  bot.onText(/\/start(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    return bot.sendMessage(chatId, getMenuText(), { parse_mode: 'HTML' });
+  });
+
+  bot.onText(/\/myid/, (msg) => {
+    bot.sendMessage(msg.chat.id, `ID Chat ini: ${msg.chat.id}\nID Pengirim: ${msg.from.id}\nUsername: ${msg.from.username}`);
+  });
+
   bot.onText(/\/help(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
