@@ -44,6 +44,34 @@ app.all('/api/reminder', async (req, res) => {
   }
 });
 
+// Endpoint untuk menerima webhook dari Google Sheets (Two-Way Sync)
+app.post('/api/sync-from-sheets', async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data || !data.orderId) {
+      return res.status(400).json({ success: false, message: 'Missing orderId' });
+    }
+
+    const { orderId, trackerStatus, notes, technicianName } = data;
+    const updates = {};
+    if (trackerStatus) updates.trackerStatus = trackerStatus;
+    if (notes !== undefined) updates.notes = notes;
+    if (technicianName !== undefined) updates.technicianName = technicianName;
+    updates.updatedBy = 'Google Sheets Auto Sync';
+
+    const success = await updateTask(orderId, updates);
+    
+    if (success) {
+      res.status(200).json({ success: true, message: `Task ${orderId} updated successfully from Google Sheets.` });
+    } else {
+      res.status(404).json({ success: false, message: `Task ${orderId} not found.` });
+    }
+  } catch (error) {
+    console.error("Error processing sync from sheets:", error);
+    res.status(500).json({ success: false, error: error.toString() });
+  }
+});
+
 if (isVercel) {
   // Webhook Mode untuk Vercel Serverless
   app.post(`/api/webhook`, async (req, res) => {
