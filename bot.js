@@ -861,6 +861,51 @@ function setupBotListeners(bot) {
     }
   });
 
+  bot.onText(/\/alih(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    const orderId = match[1] ? match[1].trim() : null;
+    
+    if (!orderId) {
+      return bot.sendMessage(chatId, `<b>Format Perintah Alih:</b>\n<code>/alih &lt;order_id&gt;</code>\n\nContoh: <code>/alih 1002119373</code>`, { parse_mode: 'HTML' });
+    }
+
+    try {
+      const task = await getTaskById(orderId);
+      if (!task) {
+        return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
+      }
+
+      const taskSTO = task.sto || '';
+      if (!taskSTO) {
+        return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak memiliki data STO.`, { parse_mode: 'HTML' });
+      }
+
+      const matchedTechs = await getTechniciansBySTO(taskSTO);
+      if (matchedTechs.length === 0) {
+        return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar untuk STO <b>${escapeHtml(taskSTO)}</b>.`, { parse_mode: 'HTML' });
+      }
+
+      const inline_keyboard = [];
+      let row = [];
+      matchedTechs.forEach(tech => {
+        row.push({ text: tech.name, callback_data: `alih_to:${task.id}:${tech.chatId}` });
+        if (row.length === 2) {
+          inline_keyboard.push(row);
+          row = [];
+        }
+      });
+      if (row.length > 0) inline_keyboard.push(row);
+
+      return bot.sendMessage(chatId, `<b>PILIH TEKNISI PENGGANTI</b>\nSilakan pilih teknisi di STO <b>${escapeHtml(taskSTO)}</b> untuk mengalihkan order <code>${escapeHtml(task.id)}</code>:`, {
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard }
+      });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Terjadi kesalahan: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
+  });
+
   bot.onText(/\/cek(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
@@ -1172,6 +1217,48 @@ function setupBotListeners(bot) {
       return handleAssignAndNotifySTO(bot, chatId, orderId, updatedBy);
     }
 
+    if (data.startsWith('alih_to:')) {
+      delete userStates[chatId];
+      const [, orderId, targetChatId] = data.split(':');
+      try {
+        const task = await getTaskById(orderId);
+        if (!task) {
+          return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
+        }
+        
+        const taskSTO = task.sto || '';
+        const matchedTechs = await getTechniciansBySTO(taskSTO);
+        const selectedTech = matchedTechs.find(t => String(t.chatId) === String(targetChatId));
+        
+        if (!selectedTech) {
+          return bot.sendMessage(chatId, `Teknisi tidak ditemukan atau tidak terdaftar di STO ${taskSTO}.`, { parse_mode: 'HTML' });
+        }
+
+        const techName = `${selectedTech.name} ${selectedTech.username || ''}`.trim();
+        await updateTask(task.id, { technicianName: techName, updatedBy });
+        
+        const updatedTask = await getTaskById(task.id);
+        
+        try {
+          const tId = selectedTech.chatId.startsWith('@') ? selectedTech.chatId : selectedTech.chatId;
+          const notifyMsg = `<b>🔄 WORK ORDER DIALIHKAN (STO ${escapeHtml(taskSTO)})</b>\n\n` +
+            `<b>Order ID:</b> <code>${escapeHtml(updatedTask.id)}</code>\n` +
+            `<b>Pelanggan:</b> ${escapeHtml(updatedTask.customerName || '-')}\n` +
+            `<b>Alamat:</b> ${escapeHtml(updatedTask.address || '-')}\n` +
+            `<b>Layanan:</b> ${escapeHtml(updatedTask.serviceType || '-')}\n` +
+            `<b>Di Update Oleh:</b> ${escapeHtml(updatedBy)}\n\n` +
+            `<i>Tugas ini dialihkan kepada Anda. Silakan segera ditindaklanjuti!</i>`;
+          await bot.sendMessage(tId, notifyMsg, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
+        } catch (e) {
+          console.error("Gagal mengirim notif alih", e);
+        }
+        
+        return bot.sendMessage(chatId, `✅ <b>Order ${escapeHtml(updatedTask.id)} berhasil dialihkan ke ${escapeHtml(selectedTech.name)}.</b>`, { parse_mode: 'HTML' });
+      } catch (err) {
+        return bot.sendMessage(chatId, `Gagal mengalihkan order: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+      }
+    }
+
     if (data.startsWith('st:')) {
       const [, orderId, newStatus] = data.split(':');
       const userId = query.from ? query.from.id : '';
@@ -1254,41 +1341,58 @@ async function handleAssignAndNotifySTO(bot, chatId, orderId, updatedBy = '-') {
       return bot.sendMessage(chatId, `Belum ada teknisi yang terdaftar untuk STO <b>${escapeHtml(taskSTO)}</b>.\n\nSilakan daftarkan dengan perintah:\n<code>/daftar_teknisi ${escapeHtml(taskSTO)} NamaTeknisi @Username</code>`, { parse_mode: 'HTML' });
     }
 
-    const techNames = matchedTechs.map(t => `${escapeHtml(t.name)} (${escapeHtml(t.username || 'NoUsername')})`).join(', ');
-    await updateTask(task.id, { technicianName: techNames, trackerStatus: 'On Progress', updatedBy });
+    const allTasks = await getAllTasks();
+    const activeStatuses = ['Pending', 'On Progress', 'Kendala'];
+    const activeTasks = allTasks.filter(t => activeStatuses.includes(t.trackerStatus));
 
-    const updatedTask = await getTaskById(task.id);
-
-    let notifyResults = [];
-    let tagsToMention = [];
+    let minWorkload = Infinity;
+    let candidateTechs = [];
 
     for (const tech of matchedTechs) {
-      if (tech.username) {
-        tagsToMention.push(tech.username);
+      let workload = 0;
+      for (const t of activeTasks) {
+        if (t.technicianName && (t.technicianName.includes(tech.name) || (tech.username && t.technicianName.includes(tech.username)))) {
+          workload++;
+        }
       }
-      try {
-        const targetId = tech.chatId.startsWith('@') ? tech.chatId : tech.chatId;
-        const notifyMsg = `<b>NOTIFIKASI WORK ORDER BARU (STO ${escapeHtml(taskSTO)})</b>\n\n` +
-          `<b>Order ID:</b> <code>${escapeHtml(updatedTask.id)}</code>\n` +
-          `<b>Pelanggan:</b> ${escapeHtml(updatedTask.customerName || '-')}\n` +
-          `<b>Alamat:</b> ${escapeHtml(updatedTask.address || '-')}\n` +
-          `<b>Layanan:</b> ${escapeHtml(updatedTask.serviceType || '-')}\n` +
-          `<b>Status:</b> <b>On Progress</b>\n` +
-          `<b>Di Update Oleh:</b> ${escapeHtml(updatedBy)}\n\n` +
-          `<i>Silakan segera ditindaklanjuti!</i>`;
-
-        await bot.sendMessage(targetId, notifyMsg, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
-        notifyResults.push(`• <b>${escapeHtml(tech.name)}</b> (${escapeHtml(tech.username || 'Direct Message')}): BERHASIL TERSAMPAIKAN`);
-      } catch (dmErr) {
-        notifyResults.push(`• <b>${escapeHtml(tech.name)}</b> (${escapeHtml(tech.username || 'ID ' + tech.chatId)}): Di-tag di Grup`);
+      tech.workload = workload;
+      if (workload < minWorkload) {
+        minWorkload = workload;
+        candidateTechs = [tech];
+      } else if (workload === minWorkload) {
+        candidateTechs.push(tech);
       }
     }
 
-    const mentionsText = tagsToMention.length > 0 ? `\n\nTag Teknisi: ${tagsToMention.map(t => `<code>${escapeHtml(t)}</code>`).join(' ')}` : '';
+    const selectedTech = candidateTechs[Math.floor(Math.random() * candidateTechs.length)];
+    const techName = `${selectedTech.name} ${selectedTech.username || ''}`.trim();
 
-    const resultMsg = `<b>ORDER BERHASIL DI-ASSIGN BERDASARKAN STO ${escapeHtml(taskSTO)}!</b>\n\n` +
-      `<b>Teknisi Ditugaskan:</b> ${techNames}${mentionsText}\n\n` +
-      `<b>Status Notifikasi:</b>\n${notifyResults.join('\n')}\n\n` +
+    await updateTask(task.id, { technicianName: techName, trackerStatus: 'On Progress', updatedBy });
+    const updatedTask = await getTaskById(task.id);
+
+    let notifyResult = '';
+    try {
+      const targetId = selectedTech.chatId.startsWith('@') ? selectedTech.chatId : selectedTech.chatId;
+      const notifyMsg = `<b>NOTIFIKASI WORK ORDER BARU (STO ${escapeHtml(taskSTO)})</b>\n\n` +
+        `<b>Order ID:</b> <code>${escapeHtml(updatedTask.id)}</code>\n` +
+        `<b>Pelanggan:</b> ${escapeHtml(updatedTask.customerName || '-')}\n` +
+        `<b>Alamat:</b> ${escapeHtml(updatedTask.address || '-')}\n` +
+        `<b>Layanan:</b> ${escapeHtml(updatedTask.serviceType || '-')}\n` +
+        `<b>Status:</b> <b>On Progress</b>\n` +
+        `<b>Di Update Oleh:</b> ${escapeHtml(updatedBy)}\n\n` +
+        `<i>Anda dipilih otomatis karena memiliki tugas aktif paling sedikit (${minWorkload} task). Silakan segera ditindaklanjuti!</i>`;
+
+      await bot.sendMessage(targetId, notifyMsg, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
+      notifyResult = `• <b>${escapeHtml(selectedTech.name)}</b>: BERHASIL TERSAMPAIKAN`;
+    } catch (dmErr) {
+      notifyResult = `• <b>${escapeHtml(selectedTech.name)}</b>: Gagal mengirim pesan (bot diblokir atau belum start)`;
+    }
+
+    const mentionsText = selectedTech.username ? `\n\nTag Teknisi: <code>${escapeHtml(selectedTech.username)}</code>` : '';
+
+    const resultMsg = `<b>ORDER BERHASIL DI-ASSIGN OTOMATIS BERDASARKAN BEBAN KERJA!</b>\n\n` +
+      `<b>Teknisi Terpilih:</b> ${escapeHtml(selectedTech.name)} (Beban tugas aktif: ${minWorkload})${mentionsText}\n\n` +
+      `<b>Status Notifikasi:</b>\n${notifyResult}\n\n` +
       `${formatTaskMessage(updatedTask)}`;
 
     return bot.sendMessage(chatId, resultMsg, { parse_mode: 'HTML', ...getTaskActionButtons(updatedTask.id) });
