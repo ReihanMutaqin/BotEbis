@@ -1231,7 +1231,7 @@ function setupBotListeners(bot) {
         const selectedTech = matchedTechs.find(t => String(t.chatId) === String(targetChatId));
         
         if (!selectedTech) {
-          return bot.sendMessage(chatId, `Teknisi tidak ditemukan atau tidak terdaftar di STO ${taskSTO}.`, { parse_mode: 'HTML' });
+          return bot.sendMessage(chatId, `DEBUG: targetChatId="${targetChatId}", available=[${matchedTechs.map(t=>t.chatId).join(',')}] | Teknisi tidak ditemukan atau tidak terdaftar di STO ${taskSTO}.`, { parse_mode: 'HTML' });
         }
 
         const techName = `${selectedTech.name} ${selectedTech.username || ''}`.trim();
