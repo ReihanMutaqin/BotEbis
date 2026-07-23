@@ -40,7 +40,7 @@ Bot Telegram interaktif yang terhubung langsung secara real-time ke **Firebase F
    vercel
    ```
 2. Tambahkan Environment Variable di Dashboard Vercel:
-   - `TELEGRAM_BOT_TOKEN`: `8844898337:AAHMHLyzLcUN6Znnh7ToNJzQdxdYaAsnzPs`
+   - `TELEGRAM_BOT_TOKEN`: `<YOUR_TELEGRAM_BOT_TOKEN>`
    - `VITE_FIREBASE_API_KEY`: `AIzaSyAP5atKFrnU6BrCRxD62taBUIsU23ryLJw`
    - `VITE_FIREBASE_PROJECT_ID`: `ebisteknisi`
    - `VITE_FIREBASE_DATABASE_URL`: `https://ebisteknisi-default-rtdb.asia-southeast1.firebasedatabase.app`
