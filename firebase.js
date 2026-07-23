@@ -254,11 +254,50 @@ async function unregisterChatUser(chatId) {
   }
 }
 
+const CONFIG_COLLECTION = "ebis_config";
+
+async function getAdminAuth() {
+  const defaultAuth = { username: "admin", password: "ebis902544604" };
+  try {
+    const docRef = doc(db, CONFIG_COLLECTION, "admin_auth");
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      return {
+        username: data.username || "admin",
+        password: data.password || "ebis902544604"
+      };
+    } else {
+      await setDoc(docRef, defaultAuth);
+      return defaultAuth;
+    }
+  } catch (e) {
+    console.error("Failed to fetch admin auth from Firestore:", e.message);
+    return defaultAuth;
+  }
+}
+
+async function updateAdminAuth(newPassword, newUsername = "admin") {
+  try {
+    const docRef = doc(db, CONFIG_COLLECTION, "admin_auth");
+    await setDoc(docRef, {
+      username: newUsername,
+      password: newPassword,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("Failed to update admin auth in Firestore:", e.message);
+    throw e;
+  }
+}
+
 module.exports = {
   db,
   TASKS_COLLECTION,
   TECH_COLLECTION,
   CHATS_COLLECTION,
+  CONFIG_COLLECTION,
   getAllTasks,
   getTaskById,
   updateTask,
@@ -270,5 +309,7 @@ module.exports = {
   unregisterChatUser,
   setUserWitel,
   getAllRecipientChatIds,
-  getAllRecipientProfiles
+  getAllRecipientProfiles,
+  getAdminAuth,
+  updateAdminAuth
 };
