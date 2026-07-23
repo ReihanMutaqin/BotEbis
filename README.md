@@ -41,13 +41,13 @@ Bot Telegram interaktif yang terhubung langsung secara real-time ke **Firebase F
    ```
 2. Tambahkan Environment Variable di Dashboard Vercel:
    - `TELEGRAM_BOT_TOKEN`: `<YOUR_TELEGRAM_BOT_TOKEN>`
-   - `VITE_FIREBASE_API_KEY`: `AIzaSyAP5atKFrnU6BrCRxD62taBUIsU23ryLJw`
-   - `VITE_FIREBASE_PROJECT_ID`: `ebisteknisi`
-   - `VITE_FIREBASE_DATABASE_URL`: `https://ebisteknisi-default-rtdb.asia-southeast1.firebasedatabase.app`
-   - `VITE_FIREBASE_AUTH_DOMAIN`: `ebisteknisi.firebaseapp.com`
-   - `VITE_FIREBASE_STORAGE_BUCKET`: `ebisteknisi.firebasestorage.app`
-   - `VITE_FIREBASE_MESSAGING_SENDER_ID`: `1034060411734`
-   - `VITE_FIREBASE_APP_ID`: `1:1034060411734:web:2080bc85c1a21732ba5cf7`
+   - `VITE_FIREBASE_API_KEY`: `<YOUR_FIREBASE_API_KEY>`
+   - `VITE_FIREBASE_PROJECT_ID`: `<YOUR_FIREBASE_PROJECT_ID>`
+   - `VITE_FIREBASE_DATABASE_URL`: `<YOUR_FIREBASE_DATABASE_URL>`
+   - `VITE_FIREBASE_AUTH_DOMAIN`: `<YOUR_FIREBASE_AUTH_DOMAIN>`
+   - `VITE_FIREBASE_STORAGE_BUCKET`: `<YOUR_FIREBASE_STORAGE_BUCKET>`
+   - `VITE_FIREBASE_MESSAGING_SENDER_ID`: `<YOUR_FIREBASE_MESSAGING_SENDER_ID>`
+   - `VITE_FIREBASE_APP_ID`: `<YOUR_FIREBASE_APP_ID>`
 3. Setelah deploy selesai dan kamu mendapatkan URL (misal: `https://ebis-bot.vercel.app`), aktifkan Webhook Telegram dengan menjalankan command:
    ```bash
    node set_webhook.js https://ebis-bot.vercel.app
