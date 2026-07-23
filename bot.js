@@ -14,7 +14,10 @@ const {
   getAllRecipientChatIds,
   getAllRecipientProfiles,
   getAdminAuth,
-  updateAdminAuth
+  updateAdminAuth,
+  addOrUpdateAdminUser,
+  getAllAdminUsers,
+  deleteAdminUser
 } = require('./firebase');
 
 // User state tracking for multi-step prompts
@@ -975,8 +978,8 @@ function setupBotListeners(bot) {
       `<i>Pesan reminder harian & broadcast akan otomatis difilter khusus Witel ini.</i>`, { parse_mode: 'HTML' });
   });
 
-  // Secret Admin Command /dashboard (Restricted to @Rei219 / ID 902544604)
-  bot.onText(/\/dashboard(?:@\w+)?/, async (msg) => {
+  // Secret Admin Command /dashboard & /listadmin (Restricted to @Rei219 / ID 902544604)
+  bot.onText(/\/dashboard(?:@\w+)?|\/listadmin(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
     saveChatUser(chatId, msg.from);
 
@@ -985,15 +988,21 @@ function setupBotListeners(bot) {
     }
 
     try {
-      const authData = await getAdminAuth();
+      const admins = await getAllAdminUsers();
+      let adminListText = '';
+      admins.forEach((adm, i) => {
+        adminListText += `${i + 1}. Username: <code>${escapeHtml(adm.username)}</code> | Password: <code>${escapeHtml(adm.password)}</code>\n`;
+      });
+
       const text = `🔐 <b>KREDENSIAL AKSES DASHBOARD MANAGER</b>\n` +
         `═════════════════════════\n` +
-        `<b>URL Dashboard:</b> https://ebis-pi.vercel.app/tracker/manager\n` +
-        `<b>Username:</b> <code>${escapeHtml(authData.username || 'admin')}</code>\n` +
-        `<b>Password:</b> <code>${escapeHtml(authData.password || 'ebis902544604')}</code>\n` +
+        `<b>URL Dashboard:</b> https://ebis-pi.vercel.app/tracker/manager\n\n` +
+        `<b>Daftar Akun Admin (${admins.length}):</b>\n` +
+        `${adminListText}` +
         `═════════════════════════\n` +
-        `<i>Password ini tersimpan secara realtime di Firebase Firestore.</i>\n\n` +
-        `<i>Ketik <code>/setadminpass &lt;password_baru&gt;</code> untuk mengubah password secara instan.</i>`;
+        `<i>Perintah Manajemen Akun Admin (Khusus @Rei219):</i>\n` +
+        `• Tambah/Edit Akun: <code>/setadmin &lt;username&gt; &lt;password&gt;</code>\n` +
+        `• Hapus Akun: <code>/deladmin &lt;username&gt;</code>`;
 
       return bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
     } catch (err) {
@@ -1001,8 +1010,8 @@ function setupBotListeners(bot) {
     }
   });
 
-  // Secret Admin Command /setadminpass <password> (Restricted to @Rei219 / ID 902544604)
-  bot.onText(/\/setadminpass(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+  // Secret Admin Command /setadmin <username> <password>
+  bot.onText(/\/setadmin(?:_user)?(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     saveChatUser(chatId, msg.from);
 
@@ -1010,20 +1019,60 @@ function setupBotListeners(bot) {
       return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah ini khusus untuk Administrator (<b>@Rei219</b>).`, { parse_mode: 'HTML' });
     }
 
-    const newPass = match[1] ? match[1].trim() : '';
-    if (!newPass) {
-      return bot.sendMessage(chatId, `<b>Format Mengubah Password Admin Dashboard:</b>\n\n` +
-        `<code>/setadminpass &lt;password_baru&gt;</code>\n\n` +
-        `<i>Contoh:</i> <code>/setadminpass ebis902544604</code>`, { parse_mode: 'HTML' });
+    const rawArgs = match[1] ? match[1].trim() : '';
+    if (!rawArgs) {
+      return bot.sendMessage(chatId, `<b>Format Tambah / Edit Akun Admin Dashboard:</b>\n\n` +
+        `<code>/setadmin &lt;username&gt; &lt;password&gt;</code>\n\n` +
+        `<i>Contoh:</i>\n` +
+        `• <code>/setadmin admin2 pass123</code>\n` +
+        `• <code>/setadmin manager ebis2026</code>`, { parse_mode: 'HTML' });
+    }
+
+    const tokens = rawArgs.split(/\s+/);
+    if (tokens.length < 2) {
+      return bot.sendMessage(chatId, `Silakan masukkan password setelah username. Contoh: <code>/setadmin admin2 pass123</code>`, { parse_mode: 'HTML' });
+    }
+
+    const uName = tokens[0].trim();
+    const uPass = tokens.slice(1).join(' ').trim();
+
+    try {
+      await addOrUpdateAdminUser(uName, uPass, getSenderTag(msg.from));
+      if (uName.toLowerCase() === 'admin') {
+        await updateAdminAuth(uPass, uName);
+      }
+
+      return bot.sendMessage(chatId, `✅ <b>BERHASIL MENAMBAH / MEMPERBARUI AKUN ADMIN!</b>\n\n` +
+        `<b>Username:</b> <code>${escapeHtml(uName)}</code>\n` +
+        `<b>Password:</b> <code>${escapeHtml(uPass)}</code>\n\n` +
+        `<i>Akun ini telah tersimpan di Firebase Firestore dan langsung dapat digunakan untuk Login Web Dashboard!</i>`, { parse_mode: 'HTML' });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Gagal menyimpan akun admin ke Firebase: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
+  });
+
+  // Secret Admin Command /deladmin <username>
+  bot.onText(/\/deladmin(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    saveChatUser(chatId, msg.from);
+
+    if (!isAuthorizedAdmin(msg.from)) {
+      return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah ini khusus untuk Administrator (<b>@Rei219</b>).`, { parse_mode: 'HTML' });
+    }
+
+    const targetUser = match[1] ? match[1].trim() : '';
+    if (!targetUser) {
+      return bot.sendMessage(chatId, `<b>Format Hapus Akun Admin Dashboard:</b>\n\n` +
+        `<code>/deladmin &lt;username&gt;</code>\n\n` +
+        `<i>Contoh:</i> <code>/deladmin admin2</code>`, { parse_mode: 'HTML' });
     }
 
     try {
-      await updateAdminAuth(newPass);
-      return bot.sendMessage(chatId, `✅ <b>BERHASIL MENGUBAH PASSWORD ADMIN!</b>\n\n` +
-        `<b>Password Baru:</b> <code>${escapeHtml(newPass)}</code>\n\n` +
-        `<i>Password baru telah tersimpan di Firebase Firestore dan langsung aktif untuk Login Web Dashboard!</i>`, { parse_mode: 'HTML' });
+      await deleteAdminUser(targetUser);
+      return bot.sendMessage(chatId, `✅ <b>BERHASIL MENGHAPUS AKUN ADMIN!</b>\n\n` +
+        `Akun <code>${escapeHtml(targetUser)}</code> telah dihapus dari Firebase Firestore.`, { parse_mode: 'HTML' });
     } catch (err) {
-      return bot.sendMessage(chatId, `Gagal mengubah password di Firebase: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `Gagal menghapus akun admin: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
     }
   });
 

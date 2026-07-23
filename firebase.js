@@ -292,12 +292,55 @@ async function updateAdminAuth(newPassword, newUsername = "admin") {
   }
 }
 
+const ADMINS_COLLECTION = "ebis_admins";
+
+async function addOrUpdateAdminUser(username, password, createdBy = '@Rei219') {
+  if (!username || !password) return false;
+  const docId = username.trim().toLowerCase();
+  const docRef = doc(db, ADMINS_COLLECTION, docId);
+  await setDoc(docRef, {
+    username: username.trim(),
+    password: password.trim(),
+    createdBy: createdBy,
+    updatedAt: new Date().toISOString()
+  }, { merge: true });
+  return true;
+}
+
+async function getAllAdminUsers() {
+  const admins = [];
+  try {
+    const querySnapshot = await getDocs(collection(db, ADMINS_COLLECTION));
+    querySnapshot.forEach(docSnap => {
+      admins.push(docSnap.data());
+    });
+
+    if (admins.length === 0) {
+      const defaultAdmin = { username: "admin", password: "ebis902544604", createdBy: "SISTEM" };
+      await addOrUpdateAdminUser(defaultAdmin.username, defaultAdmin.password, defaultAdmin.createdBy);
+      admins.push(defaultAdmin);
+    }
+  } catch (e) {
+    console.error("Error fetching admin users:", e.message);
+  }
+  return admins;
+}
+
+async function deleteAdminUser(username) {
+  if (!username) return false;
+  const docId = username.trim().toLowerCase();
+  const docRef = doc(db, ADMINS_COLLECTION, docId);
+  await deleteDoc(docRef);
+  return true;
+}
+
 module.exports = {
   db,
   TASKS_COLLECTION,
   TECH_COLLECTION,
   CHATS_COLLECTION,
   CONFIG_COLLECTION,
+  ADMINS_COLLECTION,
   getAllTasks,
   getTaskById,
   updateTask,
@@ -311,5 +354,8 @@ module.exports = {
   getAllRecipientChatIds,
   getAllRecipientProfiles,
   getAdminAuth,
-  updateAdminAuth
+  updateAdminAuth,
+  addOrUpdateAdminUser,
+  getAllAdminUsers,
+  deleteAdminUser
 };
