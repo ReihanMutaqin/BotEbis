@@ -1674,7 +1674,8 @@ function formatDailyReminderText(tasks, userProfile = null) {
     `<b>📊 ${summaryTitle}:</b>\n` +
     `Total: <b>${overall.Total} Order</b> | ⏳ Pend: <b>${overall.Pending}</b> | 🚧 Prog: <b>${overall['On Progress']}</b> | ⚠️ Kdl: <b>${overall.Kendala}</b> | ✅ Comp: <b>${overall.Completed}</b>\n` +
     `─────────────────────────\n` +
-    `<i>Ketik <code>/setwitel &lt;WITEL|ALL&gt;</code> untuk mengatur filter Witel.</i>`;
+    `<i>Ketik <code>/setwitel &lt;WITEL|ALL&gt;</code> untuk mengatur filter Witel.</i>\n` +
+    `<i>Jika ingin cek Detail per STO silahkan gunakan <code>/cek STO</code> : Contoh <code>/cek KBY</code></i>`;
 
   return text;
 }
