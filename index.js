@@ -52,14 +52,14 @@ app.post('/api/sync-from-sheets', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing orderId' });
     }
 
-    const { orderId, trackerStatus, notes, technicianName, woId, nik } = data;
+    const { orderId, trackerStatus, notes, technicianName, woId, nik, updatedBy } = data;
     const updates = {};
     if (trackerStatus) updates.trackerStatus = trackerStatus;
     if (notes !== undefined) updates.notes = notes;
     if (technicianName !== undefined) updates.technicianName = technicianName;
     if (woId !== undefined) updates.woId = woId;
     if (nik !== undefined) updates.nik = nik;
-    updates.updatedBy = 'Google Sheets Auto Sync';
+    updates.updatedBy = updatedBy || 'Google Sheets Auto Sync';
 
     const success = await updateTask(orderId, updates);
     
