@@ -26,6 +26,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const TASKS_COLLECTION = "ebis_tasks";
+const COMPLETED_COLLECTION = "ebis_tasks_completed";
 const TECH_COLLECTION = "ebis_technicians";
 
 // Task helpers
@@ -39,8 +40,14 @@ async function getAllTasks() {
 }
 
 async function getTaskById(orderId) {
-  const docRef = doc(db, TASKS_COLLECTION, orderId);
-  const docSnap = await getDoc(docRef);
+  let docRef = doc(db, TASKS_COLLECTION, orderId);
+  let docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return { id: docSnap.id, ...docSnap.data() };
+  }
+
+  docRef = doc(db, COMPLETED_COLLECTION, orderId);
+  docSnap = await getDoc(docRef);
   if (docSnap.exists()) {
     return { id: docSnap.id, ...docSnap.data() };
   }
@@ -91,18 +98,36 @@ async function syncToGoogleSheets(task) {
 }
 
 async function updateTask(orderId, updates) {
-  const docRef = doc(db, TASKS_COLLECTION, orderId);
+  let coll = TASKS_COLLECTION;
+  let docRef = doc(db, coll, orderId);
+  let docSnap = await getDoc(docRef);
+  
+  if (!docSnap.exists()) {
+    coll = COMPLETED_COLLECTION;
+    docRef = doc(db, coll, orderId);
+    docSnap = await getDoc(docRef);
+  }
+
+  if (!docSnap.exists()) return false;
+
+  const existingData = docSnap.data();
   const updatedAt = new Date().toISOString();
-  await setDoc(docRef, {
-    ...updates,
-    updatedAt: updatedAt
-  }, { merge: true });
+  const newData = { ...existingData, ...updates, updatedAt };
+
+  if (updates.trackerStatus === 'Completed') {
+    await setDoc(doc(db, COMPLETED_COLLECTION, orderId), newData);
+    if (coll === TASKS_COLLECTION) {
+      await deleteDoc(doc(db, TASKS_COLLECTION, orderId));
+    }
+  } else {
+    await setDoc(doc(db, TASKS_COLLECTION, orderId), newData);
+    if (coll === COMPLETED_COLLECTION) {
+      await deleteDoc(doc(db, COMPLETED_COLLECTION, orderId));
+    }
+  }
 
   try {
-    const updatedSnap = await getDoc(docRef);
-    if (updatedSnap.exists()) {
-      syncToGoogleSheets({ id: updatedSnap.id, ...updatedSnap.data() });
-    }
+    syncToGoogleSheets({ id: orderId, ...newData });
   } catch (e) {
     console.error('Error fetching updated task for Google Sheets sync:', e.message);
   }
