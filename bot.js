@@ -175,12 +175,16 @@ function getFullHelpText() {
 ═════════════════════════
 
 <b>PENCARIAN & MONITORING WORK ORDER:</b>
-• <code>/cek &lt;order_id | STO | nama_pelanggan&gt;</code>
-  <i>Cek detail order atau tampilkan daftar order per STO.</i>
+• <code>/cek &lt;order_id | STO | nama_pelanggan&gt; [status]</code>
+  <i>Cek detail order atau tampilkan daftar order per STO (bisa difilter status: completed, on, pending, kendala, cancel).</i>
   <i>Contoh:</i>
     <code>/cek 1002476754</code>
     <code>/cek JTN</code>
-    <code>/cek Toko Om Arah</code>
+    <code>/cek JTN completed</code>
+    <code>/cek JTN on</code>
+    <code>/cek JTN pending</code>
+    <code>/cek JTN kendala</code>
+    <code>/cek JTN cancel</code>
 
 • <code>/rekap</code> atau <code>/status</code>
   <i>Lihat statistik ringkasan total order.</i>
@@ -250,9 +254,10 @@ CATATAN: Penarikan kabel OK, proses terminasi</code>
 2. Pakai Nama Lengkap (Tanda Kutip):
 <code>/update 1002476754 Pending "Nama Kalian" Pending jadwal</code>
 
-3. Cek List Order per STO:
+3. Cek List Order per STO & Status:
 <code>/cek JTN</code>
-<code>/cek CWA</code>
+<code>/cek JTN completed</code>
+<code>/cek JTN on</code>
 
 <i>Gunakan <code>/help</code> untuk melihat seluruh daftar perintah lengkap.</i>`;
 }
@@ -442,7 +447,7 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
 
   // Navigation Row: [ < Prev ] [ 1/24 ] [ Next > ]
   if (totalPages > 1 && filterType && filterQuery) {
-    const safeQuery = String(filterQuery).substring(0, 25);
+    const safeQuery = String(filterQuery).substring(0, 35);
     const navRow = [];
 
     if (currentPage > 1) {
@@ -692,7 +697,7 @@ function setupBotListeners(bot) {
 
       if (text === 'Cek Work Order') {
         userStates[chatId] = { action: 'awaiting_search' };
-        return bot.sendMessage(chatId, '<b>Silakan kirimkan Nomor Order, No Internet, Nama Pelanggan, atau Kode STO (misal: JTN) yang ingin dicari:</b>', { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
+        return bot.sendMessage(chatId, '<b>Silakan kirimkan Nomor Order, No Internet, Nama Pelanggan, atau Kode STO + Status (misal: <code>JTN completed</code>, <code>JTN on</code>, <code>JTN pending</code>, <code>JTN kendala</code>, <code>JTN cancel</code>):</b>', { parse_mode: 'HTML', reply_markup: { force_reply: true, selective: true } });
       }
 
       if (text === 'Rekap Status') {
@@ -837,7 +842,7 @@ function setupBotListeners(bot) {
     const queryStr = match[1];
     if (!queryStr) {
       userStates[chatId] = { action: 'awaiting_search' };
-      return bot.sendMessage(chatId, '<b>Silakan masukkan Nomor Order, Nama Pelanggan, atau Kode STO (misal: JTN):</b>', { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, '<b>Silakan masukkan Nomor Order, Nama Pelanggan, atau Kode STO + Status (misal: <code>JTN completed</code>, <code>JTN on</code>, <code>JTN pending</code>, <code>JTN kendala</code>, <code>JTN cancel</code>):</b>', { parse_mode: 'HTML' });
     }
     return handleSearch(bot, chatId, queryStr.trim());
   });
@@ -1092,26 +1097,97 @@ async function handleAssignAndNotifySTO(bot, chatId, orderId, updatedBy = '-') {
 }
 
 // Helpers / Search
-async function handleSearch(bot, chatId, queryStr, page = 1, messageId = null) {
-  try {
-    if (!messageId) {
-      await bot.sendMessage(chatId, `<i>Mencari data: <code>${escapeHtml(queryStr)}</code>...</i>`, { parse_mode: 'HTML' });
+function parseSearchQueryAndStatus(rawQuery) {
+  if (!rawQuery) return { query: '', status: null };
+
+  const trimmed = rawQuery.trim();
+  const lower = trimmed.toLowerCase();
+
+  const statusMappings = [
+    { keys: ['on progress', 'on-progress', 'on_progress'], status: 'On Progress' },
+    { keys: ['completed', 'complete', 'selesai'], status: 'Completed' },
+    { keys: ['on', 'progress', 'jalan'], status: 'On Progress' },
+    { keys: ['pending', 'pnd'], status: 'Pending' },
+    { keys: ['kendala', 'issue', 'knd'], status: 'Kendala' },
+    { keys: ['cancel', 'batal', 'cnc'], status: 'Cancel' }
+  ];
+
+  for (const item of statusMappings) {
+    for (const key of item.keys) {
+      if (lower === key) {
+        return { query: '', status: item.status };
+      }
+      if (lower.endsWith(' ' + key)) {
+        const queryPart = trimmed.substring(0, trimmed.length - key.length).trim();
+        if (queryPart.length > 0) {
+          return { query: queryPart, status: item.status };
+        }
+      }
     }
+  }
+
+  return { query: trimmed, status: null };
+}
+
+async function handleSearch(bot, chatId, rawQueryStr, page = 1, messageId = null) {
+  try {
+    const { query: queryStr, status: filterStatus } = parseSearchQueryAndStatus(rawQueryStr);
+
+    if (!queryStr && filterStatus) {
+      return handleTaskListByStatus(bot, chatId, filterStatus, page, messageId);
+    }
+
+    if (!messageId) {
+      const searchInfo = filterStatus
+        ? `<i>Mencari data: <code>${escapeHtml(queryStr)}</code> [Status: <b>${escapeHtml(filterStatus)}</b>]...</i>`
+        : `<i>Mencari data: <code>${escapeHtml(queryStr)}</code>...</i>`;
+      await bot.sendMessage(chatId, searchInfo, { parse_mode: 'HTML' });
+    }
+
     const allTasks = await getAllTasks();
     const qLower = queryStr.toLowerCase();
 
-    const stoMatches = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
+    // 1. Check exact STO match
+    const stoAll = allTasks.filter(t => t.sto && t.sto.toLowerCase() === qLower);
 
-    if (stoMatches.length > 0) {
-      return sendPaginatedTaskList(bot, chatId, `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()}`, stoMatches, page, 'sto', queryStr, messageId);
+    if (stoAll.length > 0) {
+      let stoMatches = stoAll;
+      if (filterStatus) {
+        stoMatches = stoAll.filter(t => (t.trackerStatus || 'Pending').toLowerCase() === filterStatus.toLowerCase());
+      }
+
+      if (stoMatches.length > 0) {
+        const title = filterStatus
+          ? `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()} (${filterStatus.toUpperCase()})`
+          : `DAFTAR WORK ORDER STO ${queryStr.toUpperCase()}`;
+        return sendPaginatedTaskList(bot, chatId, title, stoMatches, page, 'sto', rawQueryStr, messageId);
+      } else {
+        const noStatusMsg = `Tidak ada work order untuk STO <b>${escapeHtml(queryStr.toUpperCase())}</b> dengan status <b>${escapeHtml(filterStatus)}</b>.`;
+        if (messageId) {
+          return bot.editMessageText(noStatusMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }).catch(() => bot.sendMessage(chatId, noStatusMsg, { parse_mode: 'HTML' }));
+        }
+        return bot.sendMessage(chatId, noStatusMsg, { parse_mode: 'HTML' });
+      }
     }
 
+    // 2. Check single Order ID match
     const singleMatch = await getTaskById(queryStr);
     if (singleMatch) {
+      if (filterStatus) {
+        const matchStatus = (singleMatch.trackerStatus || 'Pending').toLowerCase();
+        if (matchStatus !== filterStatus.toLowerCase()) {
+          const statusMismatchMsg = `Work order <code>${escapeHtml(singleMatch.id)}</code> ditemukan, tetapi statusnya adalah <b>${escapeHtml(singleMatch.trackerStatus || 'Pending')}</b> (bukan <b>${escapeHtml(filterStatus)}</b>).`;
+          if (messageId) {
+            return bot.editMessageText(statusMismatchMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }).catch(() => bot.sendMessage(chatId, statusMismatchMsg, { parse_mode: 'HTML' }));
+          }
+          return bot.sendMessage(chatId, statusMismatchMsg, { parse_mode: 'HTML' });
+        }
+      }
       return bot.sendMessage(chatId, formatTaskMessage(singleMatch), { parse_mode: 'HTML', ...getTaskActionButtons(singleMatch.id) });
     }
 
-    const partialMatches = allTasks.filter(t =>
+    // 3. Check partial matches (customer name, technician name, witel, internet)
+    const partialAll = allTasks.filter(t =>
       (t.sto && t.sto.toLowerCase().includes(qLower)) ||
       (t.witel && t.witel.toLowerCase().includes(qLower)) ||
       (t.customerName && t.customerName.toLowerCase().includes(qLower)) ||
@@ -1119,11 +1195,29 @@ async function handleSearch(bot, chatId, queryStr, page = 1, messageId = null) {
       (t.internet && String(t.internet).toLowerCase().includes(qLower))
     );
 
-    if (partialMatches.length > 0) {
-      return sendPaginatedTaskList(bot, chatId, `HASIL PENCARIAN "${queryStr.toUpperCase()}"`, partialMatches, page, 'q', queryStr, messageId);
+    if (partialAll.length > 0) {
+      let partialMatches = partialAll;
+      if (filterStatus) {
+        partialMatches = partialAll.filter(t => (t.trackerStatus || 'Pending').toLowerCase() === filterStatus.toLowerCase());
+      }
+
+      if (partialMatches.length > 0) {
+        const title = filterStatus
+          ? `HASIL PENCARIAN "${queryStr.toUpperCase()}" (${filterStatus.toUpperCase()})`
+          : `HASIL PENCARIAN "${queryStr.toUpperCase()}"`;
+        return sendPaginatedTaskList(bot, chatId, title, partialMatches, page, 'q', rawQueryStr, messageId);
+      } else {
+        const noStatusPartialMsg = `Tidak ada hasil pencarian "<b>${escapeHtml(queryStr)}</b>" dengan status <b>${escapeHtml(filterStatus)}</b>.`;
+        if (messageId) {
+          return bot.editMessageText(noStatusPartialMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }).catch(() => bot.sendMessage(chatId, noStatusPartialMsg, { parse_mode: 'HTML' }));
+        }
+        return bot.sendMessage(chatId, noStatusPartialMsg, { parse_mode: 'HTML' });
+      }
     }
 
-    const notFoundMsg = `Work order atau STO "<b>${escapeHtml(queryStr)}</b>" tidak ditemukan.`;
+    const notFoundMsg = filterStatus
+      ? `Work order atau STO "<b>${escapeHtml(queryStr)}</b>" dengan status <b>${escapeHtml(filterStatus)}</b> tidak ditemukan.`
+      : `Work order atau STO "<b>${escapeHtml(queryStr)}</b>" tidak ditemukan.`;
     if (messageId) {
       return bot.editMessageText(notFoundMsg, { chat_id: chatId, message_id: messageId, parse_mode: 'HTML' }).catch(() => bot.sendMessage(chatId, notFoundMsg, { parse_mode: 'HTML' }));
     }
