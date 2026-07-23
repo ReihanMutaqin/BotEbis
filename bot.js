@@ -10,7 +10,9 @@ const {
   deleteTechnician,
   saveChatUser,
   unregisterChatUser,
-  getAllRecipientChatIds
+  setUserWitel,
+  getAllRecipientChatIds,
+  getAllRecipientProfiles
 } = require('./firebase');
 
 // User state tracking for multi-step prompts
@@ -940,6 +942,27 @@ function setupBotListeners(bot) {
     return bot.sendMessage(chatId, `<b>Unregistrasi berhasil! Chat ID <code>${chatId}</code> telah dihapus dari daftar broadcast reminder testing.</b>`, { parse_mode: 'HTML' });
   });
 
+  // Command /setwitel <witel>
+  bot.onText(/\/setwitel(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    saveChatUser(chatId, msg.from);
+    const witelInput = match[1] ? match[1].trim().toUpperCase() : '';
+
+    if (!witelInput) {
+      return bot.sendMessage(chatId, `<b>Format Pengaturan Witel Reminder:</b>\n\n` +
+        `<code>/setwitel &lt;KODE_WITEL|ALL&gt;</code>\n\n` +
+        `<i>Contoh:</i>\n` +
+        `• <code>/setwitel JAKTIM</code>\n` +
+        `• <code>/setwitel JAKSEL</code>\n` +
+        `• <code>/setwitel ALL</code> (tampilkan semua witel)`, { parse_mode: 'HTML' });
+    }
+
+    await setUserWitel(chatId, witelInput);
+    return bot.sendMessage(chatId, `✅ <b>Filter Witel reminder Anda berhasil diubah menjadi: <code>${escapeHtml(witelInput)}</code></b>\n\n` +
+      `<i>Pesan reminder harian & broadcast akan otomatis difilter khusus Witel ini.</i>`, { parse_mode: 'HTML' });
+  });
+
   bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
     delete userStates[msg.chat.id];
     return handleRekap(bot, msg.chat.id);
@@ -1421,7 +1444,7 @@ async function handleUpdateNote(bot, chatId, orderId, notesText, updatedBy = '-'
   }
 }
 
-function formatDailyReminderText(tasks) {
+function formatDailyReminderText(tasks, userProfile = null) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('id-ID', {
     day: 'numeric',
@@ -1437,10 +1460,32 @@ function formatDailyReminderText(tasks) {
       `<i>Belum ada data work order aktif.</i>`;
   }
 
+  let targetWitel = null;
+  if (userProfile) {
+    if (userProfile.witel && userProfile.witel !== 'ALL') {
+      targetWitel = userProfile.witel.toUpperCase().trim();
+    } else if (userProfile.sto && userProfile.sto !== 'ALL') {
+      const matchTask = tasks.find(t => t.sto && t.sto.toUpperCase().trim() === userProfile.sto.toUpperCase());
+      if (matchTask && matchTask.witel) {
+        targetWitel = matchTask.witel.toUpperCase().trim();
+      }
+    }
+  }
+
+  let filteredTasks = tasks;
+  if (targetWitel) {
+    const matched = tasks.filter(t => (t.witel || '').toUpperCase().trim() === targetWitel);
+    if (matched.length > 0) {
+      filteredTasks = matched;
+    } else {
+      targetWitel = null;
+    }
+  }
+
   const grouped = {};
   const overall = { Total: 0, Pending: 0, 'On Progress': 0, Kendala: 0, Cancel: 0, Completed: 0 };
 
-  tasks.forEach(t => {
+  filteredTasks.forEach(t => {
     const witel = (t.witel || 'WITEL LAIN').toUpperCase().trim();
     const sto = (t.sto || 'UMUM').toUpperCase().trim();
     const status = t.trackerStatus || 'Pending';
@@ -1473,8 +1518,14 @@ function formatDailyReminderText(tasks) {
     else if (status === 'Completed') stData.completed++;
   });
 
-  let text = `<b>🔔 REMINDER WORK ORDER EBIS</b>\n` +
-    `📅 <i>${dateStr} • 07:30 WIB</i>\n` +
+  const headerTitle = targetWitel
+    ? `<b>🔔 REMINDER WORK ORDER WITEL ${escapeHtml(targetWitel)}</b>`
+    : `<b>🔔 REMINDER WORK ORDER EBIS</b>`;
+
+  const stoTag = userProfile?.sto ? ` • STO <code>${escapeHtml(userProfile.sto)}</code>` : '';
+
+  let text = `${headerTitle}\n` +
+    `📅 <i>${dateStr} • 07:30 WIB${stoTag}</i>\n` +
     `═════════════════════════\n\n`;
 
   const witelKeys = Object.keys(grouped).sort();
@@ -1504,11 +1555,13 @@ function formatDailyReminderText(tasks) {
     text += `\n`;
   });
 
+  const summaryTitle = targetWitel ? `RINGKASAN WITEL ${escapeHtml(targetWitel)}` : `TOTAL RINGKASAN`;
+
   text += `═════════════════════════\n` +
-    `<b>📊 TOTAL RINGKASAN:</b>\n` +
+    `<b>📊 ${summaryTitle}:</b>\n` +
     `Total: <b>${overall.Total} Order</b> | ⏳ Pend: <b>${overall.Pending}</b> | 🚧 Prog: <b>${overall['On Progress']}</b> | ⚠️ Kdl: <b>${overall.Kendala}</b> | ✅ Comp: <b>${overall.Completed}</b>\n` +
     `─────────────────────────\n` +
-    `<i>Gunakan command <code>/cek &lt;STO&gt; [status]</code> untuk melihat detail pekerjaan.</i>`;
+    `<i>Ketik <code>/setwitel &lt;WITEL|ALL&gt;</code> untuk mengatur filter Witel.</i>`;
 
   return text;
 }
@@ -1516,23 +1569,23 @@ function formatDailyReminderText(tasks) {
 async function sendBroadcastReminder(bot) {
   try {
     const tasks = await getAllTasks();
-    const text = formatDailyReminderText(tasks);
-    const recipientIds = await getAllRecipientChatIds();
+    const profiles = await getAllRecipientProfiles();
 
     let successCount = 0;
     let failCount = 0;
 
-    for (const chatId of recipientIds) {
+    for (const profile of profiles) {
       try {
-        await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        const text = formatDailyReminderText(tasks, profile);
+        await bot.sendMessage(profile.chatId, text, { parse_mode: 'HTML' });
         successCount++;
       } catch (err) {
-        console.error(`Failed to send reminder to ${chatId}:`, err.message);
+        console.error(`Failed to send reminder to ${profile.chatId}:`, err.message);
         failCount++;
       }
     }
 
-    return { success: true, total: recipientIds.length, successCount, failCount, text };
+    return { success: true, total: profiles.length, successCount, failCount };
   } catch (err) {
     console.error('Error in sendBroadcastReminder:', err.message);
     return { success: false, error: err.message };

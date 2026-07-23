@@ -181,25 +181,64 @@ async function saveChatUser(chatId, from) {
   }
 }
 
-async function getAllRecipientChatIds() {
-  const chatIds = new Set();
+async function setUserWitel(chatId, witel) {
+  if (!chatId) return false;
+  try {
+    const docId = String(chatId);
+    const docRef = doc(db, CHATS_COLLECTION, docId);
+    await setDoc(docRef, {
+      chatId: String(chatId),
+      witel: (witel || '').toUpperCase().trim(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+    return true;
+  } catch (e) {
+    console.error("Failed to set user witel:", e.message);
+    return false;
+  }
+}
+
+async function getAllRecipientProfiles() {
+  const profilesMap = new Map();
 
   try {
     const techs = await getAllTechnicians();
     techs.forEach(t => {
-      if (t.chatId) chatIds.add(String(t.chatId));
+      if (t.chatId) {
+        profilesMap.set(String(t.chatId), {
+          chatId: String(t.chatId),
+          name: t.name,
+          username: t.username,
+          sto: (t.sto || '').toUpperCase().trim(),
+          witel: (t.witel || '').toUpperCase().trim()
+        });
+      }
     });
 
     const querySnapshot = await getDocs(collection(db, CHATS_COLLECTION));
     querySnapshot.forEach(docSnap => {
       const data = docSnap.data();
-      if (data.chatId) chatIds.add(String(data.chatId));
+      if (data.chatId) {
+        const existing = profilesMap.get(String(data.chatId)) || {};
+        profilesMap.set(String(data.chatId), {
+          chatId: String(data.chatId),
+          name: data.name || existing.name,
+          username: data.username || existing.username,
+          sto: data.sto || existing.sto || '',
+          witel: data.witel || existing.witel || ''
+        });
+      }
     });
   } catch (e) {
-    console.error('Error fetching recipient chat IDs:', e.message);
+    console.error('Error fetching recipient profiles:', e.message);
   }
 
-  return Array.from(chatIds);
+  return Array.from(profilesMap.values());
+}
+
+async function getAllRecipientChatIds() {
+  const profiles = await getAllRecipientProfiles();
+  return profiles.map(p => p.chatId);
 }
 
 async function unregisterChatUser(chatId) {
@@ -229,5 +268,7 @@ module.exports = {
   deleteTechnician,
   saveChatUser,
   unregisterChatUser,
-  getAllRecipientChatIds
+  setUserWitel,
+  getAllRecipientChatIds,
+  getAllRecipientProfiles
 };
