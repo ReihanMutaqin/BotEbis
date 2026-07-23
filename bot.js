@@ -7,7 +7,9 @@ const {
   registerTechnician,
   getAllTechnicians,
   getTechniciansBySTO,
-  deleteTechnician
+  deleteTechnician,
+  saveChatUser,
+  getAllRecipientChatIds
 } = require('./firebase');
 
 // User state tracking for multi-step prompts
@@ -485,6 +487,7 @@ function setupBotListeners(bot) {
   // Command /start & /help
   bot.onText(/\/start(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
+    saveChatUser(chatId, msg.from);
     delete userStates[chatId];
     await bot.sendMessage(chatId, getFullHelpText(), { parse_mode: 'HTML', ...getMainMenuKeyboard() });
   });
@@ -678,8 +681,10 @@ function setupBotListeners(bot) {
 
   // Handle Text Messages & Menu Buttons
   bot.on('message', async (msg) => {
-    if (!msg.text || msg.text.startsWith('/')) return;
+    if (!msg.text) return;
     const chatId = msg.chat.id;
+    saveChatUser(chatId, msg.from);
+    if (msg.text.startsWith('/')) return;
     const text = msg.text.trim();
 
     if (isMenuButton(text)) {
@@ -888,6 +893,27 @@ function setupBotListeners(bot) {
     }
   });
 
+  bot.onText(/\/reminder(?:@\w+)?|\/remind(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    saveChatUser(chatId, msg.from);
+
+    try {
+      const tasks = await getAllTasks();
+      const text = formatDailyReminderText(tasks);
+      return bot.sendMessage(chatId, text, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🚀 Kirim Broadcast ke Semua User', callback_data: 'broadcast_reminder' }]
+          ]
+        }
+      });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Gagal memuat reminder: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
+  });
+
   bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
     delete userStates[msg.chat.id];
     return handleRekap(bot, msg.chat.id);
@@ -924,6 +950,17 @@ function setupBotListeners(bot) {
     if (data === 'show_rekap') {
       delete userStates[chatId];
       return handleRekap(bot, chatId);
+    }
+
+    if (data === 'broadcast_reminder') {
+      delete userStates[chatId];
+      await bot.sendMessage(chatId, '⏳ <b>Mengirimkan reminder ke seluruh pengguna Telegram...</b>', { parse_mode: 'HTML' });
+      const result = await sendBroadcastReminder(bot);
+      if (result.success) {
+        return bot.sendMessage(chatId, `✅ <b>REMINDER BERHASIL DIKIRIM!</b>\n\nDikirim ke <b>${result.successCount} dari ${result.total} pengguna</b>.`, { parse_mode: 'HTML' });
+      } else {
+        return bot.sendMessage(chatId, `❌ Gagal broadcast: ${escapeHtml(result.error)}`, { parse_mode: 'HTML' });
+      }
     }
 
     if (data === 'noop') {
@@ -1358,6 +1395,126 @@ async function handleUpdateNote(bot, chatId, orderId, notesText, updatedBy = '-'
   }
 }
 
+function formatDailyReminderText(tasks) {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta'
+  });
+
+  if (!tasks || tasks.length === 0) {
+    return `<b>🔔 REMINDER WORK ORDER EBIS</b>\n` +
+      `📅 <i>${dateStr} • 07:30 WIB</i>\n` +
+      `═════════════════════════\n\n` +
+      `<i>Belum ada data work order aktif.</i>`;
+  }
+
+  const grouped = {};
+  const overall = { Total: 0, Pending: 0, 'On Progress': 0, Kendala: 0, Cancel: 0, Completed: 0 };
+
+  tasks.forEach(t => {
+    const witel = (t.witel || 'WITEL LAIN').toUpperCase().trim();
+    const sto = (t.sto || 'UMUM').toUpperCase().trim();
+    const status = t.trackerStatus || 'Pending';
+
+    overall.Total++;
+    if (overall[status] !== undefined) overall[status]++;
+
+    if (!grouped[witel]) grouped[witel] = {};
+    if (!grouped[witel][sto]) {
+      grouped[witel][sto] = {
+        total: 0,
+        pending: [],
+        progress: [],
+        kendala: [],
+        cancel: [],
+        completed: 0
+      };
+    }
+
+    const stData = grouped[witel][sto];
+    stData.total++;
+
+    const orderId = t.order || t.id;
+    const noteSnippet = t.notes ? ` (${t.notes.substring(0, 25)}${t.notes.length > 25 ? '...' : ''})` : '';
+
+    if (status === 'Pending') stData.pending.push(orderId);
+    else if (status === 'On Progress') stData.progress.push(orderId);
+    else if (status === 'Kendala') stData.kendala.push(`${orderId}${noteSnippet}`);
+    else if (status === 'Cancel') stData.cancel.push(orderId);
+    else if (status === 'Completed') stData.completed++;
+  });
+
+  let text = `<b>🔔 REMINDER WORK ORDER EBIS</b>\n` +
+    `📅 <i>${dateStr} • 07:30 WIB</i>\n` +
+    `═════════════════════════\n\n`;
+
+  const witelKeys = Object.keys(grouped).sort();
+
+  witelKeys.forEach(witel => {
+    text += `<b>📍 WITEL ${escapeHtml(witel)}</b>\n`;
+    const stoKeys = Object.keys(grouped[witel]).sort();
+
+    stoKeys.forEach(sto => {
+      const st = grouped[witel][sto];
+      text += `  <b>STO ${escapeHtml(sto)}:</b>\n` +
+        `  • Total: <b>${st.total}</b> | ⏳ Pend: ${st.pending.length} | 🚧 Prog: ${st.progress.length} | ⚠️ Kdl: ${st.kendala.length}\n`;
+
+      if (st.pending.length > 0) {
+        const pList = st.pending.slice(0, 5).map(id => `<code>${escapeHtml(id)}</code>`).join(', ');
+        const moreP = st.pending.length > 5 ? ` (+${st.pending.length - 5} order)` : '';
+        text += `  • ⏳ Pending: ${pList}${moreP}\n`;
+      }
+
+      if (st.kendala.length > 0) {
+        const kList = st.kendala.slice(0, 3).map(k => `<code>${escapeHtml(k)}</code>`).join(', ');
+        const moreK = st.kendala.length > 3 ? ` (+${st.kendala.length - 3} order)` : '';
+        text += `  • ⚠️ Kendala: ${kList}${moreK}\n`;
+      }
+    });
+
+    text += `\n`;
+  });
+
+  text += `═════════════════════════\n` +
+    `<b>📊 TOTAL RINGKASAN:</b>\n` +
+    `Total: <b>${overall.Total} Order</b> | ⏳ Pend: <b>${overall.Pending}</b> | 🚧 Prog: <b>${overall['On Progress']}</b> | ⚠️ Kdl: <b>${overall.Kendala}</b> | ✅ Comp: <b>${overall.Completed}</b>\n` +
+    `─────────────────────────\n` +
+    `<i>Gunakan command <code>/cek &lt;STO&gt; [status]</code> untuk melihat detail pekerjaan.</i>`;
+
+  return text;
+}
+
+async function sendBroadcastReminder(bot) {
+  try {
+    const tasks = await getAllTasks();
+    const text = formatDailyReminderText(tasks);
+    const recipientIds = await getAllRecipientChatIds();
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const chatId of recipientIds) {
+      try {
+        await bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed to send reminder to ${chatId}:`, err.message);
+        failCount++;
+      }
+    }
+
+    return { success: true, total: recipientIds.length, successCount, failCount, text };
+  } catch (err) {
+    console.error('Error in sendBroadcastReminder:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
-  setupBotListeners
+  setupBotListeners,
+  formatDailyReminderText,
+  sendBroadcastReminder
 };

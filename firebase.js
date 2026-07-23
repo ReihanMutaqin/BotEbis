@@ -160,15 +160,60 @@ async function deleteTechnician(queryStr) {
   return { deletedCount, matched };
 }
 
+const CHATS_COLLECTION = "ebis_chats";
+
+async function saveChatUser(chatId, from) {
+  if (!chatId) return;
+  try {
+    const docId = String(chatId);
+    const docRef = doc(db, CHATS_COLLECTION, docId);
+    const username = from?.username ? `@${from.username}` : '';
+    const name = [from?.first_name, from?.last_name].filter(Boolean).join(' ') || username || `User ${chatId}`;
+    
+    await setDoc(docRef, {
+      chatId: String(chatId),
+      username: username,
+      name: name,
+      lastSeen: new Date().toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.error("Failed to save chat user:", e.message);
+  }
+}
+
+async function getAllRecipientChatIds() {
+  const chatIds = new Set();
+
+  try {
+    const techs = await getAllTechnicians();
+    techs.forEach(t => {
+      if (t.chatId) chatIds.add(String(t.chatId));
+    });
+
+    const querySnapshot = await getDocs(collection(db, CHATS_COLLECTION));
+    querySnapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      if (data.chatId) chatIds.add(String(data.chatId));
+    });
+  } catch (e) {
+    console.error('Error fetching recipient chat IDs:', e.message);
+  }
+
+  return Array.from(chatIds);
+}
+
 module.exports = {
   db,
   TASKS_COLLECTION,
   TECH_COLLECTION,
+  CHATS_COLLECTION,
   getAllTasks,
   getTaskById,
   updateTask,
   registerTechnician,
   getAllTechnicians,
   getTechniciansBySTO,
-  deleteTechnician
+  deleteTechnician,
+  saveChatUser,
+  getAllRecipientChatIds
 };
