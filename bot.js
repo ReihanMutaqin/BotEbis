@@ -105,10 +105,10 @@ function buildPromptForMissingFields(task, statusName) {
     missingFields.push('CATATAN: Update catatan...');
   }
 
-  const promptCode = `<code>${missingFields.join('\n')}</code>`;
+  const promptCode = `<pre>${missingFields.join('\n')}</pre>`;
 
   return `<b>Status order <code>${escapeHtml(task.id)}</code> diubah menjadi ${escapeHtml(statusName)}.</b>\n\n` +
-    `📝 <b>Silakan lengkapi data yang masih kosong (salin & isi template di bawah):</b>\n\n` +
+    `💡 <i>Tip: Sentuh (tap) kotak di bawah ini untuk otomatis menyalin format, lalu tempel (paste) dan lengkapi datanya:</i>\n\n` +
     `${promptCode}`;
 }
 
@@ -257,14 +257,14 @@ function getFullHelpText() {
 function getTemplateGuideText() {
   return `<b>TEMPLATE UPDATE WORK ORDER TEKNISI</b>
 ─────────────────────────
-<i>Salin & isi template di bawah ini:</i>
+💡 <i>Tip: Sentuh (tap) kotak di bawah ini untuk otomatis menyalin format, lalu paste saat update:</i>
 
-<code>ORDER: 1001524450
+<pre>ORDER: 1001524450
 WO ID: WO123456
 NIK: 12345678
 STATUS: On Progress
 TEKNISI: Ahmad Fauzi
-CATATAN: Penarikan kabel OK, proses terminasi</code>
+CATATAN: Penarikan kabel OK, proses terminasi</pre>
 
 ─────────────────────────
 <b>Perintah Cepat Update:</b>
