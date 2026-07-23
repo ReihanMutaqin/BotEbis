@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
 const { setupBotListeners, sendBroadcastReminder } = require('./bot');
+const { updateTask } = require('./firebase');
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
