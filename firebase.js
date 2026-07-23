@@ -202,6 +202,19 @@ async function getAllRecipientChatIds() {
   return Array.from(chatIds);
 }
 
+async function unregisterChatUser(chatId) {
+  if (!chatId) return false;
+  try {
+    const docId = String(chatId);
+    const docRef = doc(db, CHATS_COLLECTION, docId);
+    await deleteDoc(docRef);
+    return true;
+  } catch (e) {
+    console.error("Failed to unregister chat user:", e.message);
+    return false;
+  }
+}
+
 module.exports = {
   db,
   TASKS_COLLECTION,
@@ -215,5 +228,6 @@ module.exports = {
   getTechniciansBySTO,
   deleteTechnician,
   saveChatUser,
+  unregisterChatUser,
   getAllRecipientChatIds
 };

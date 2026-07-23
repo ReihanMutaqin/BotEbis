@@ -9,6 +9,7 @@ const {
   getTechniciansBySTO,
   deleteTechnician,
   saveChatUser,
+  unregisterChatUser,
   getAllRecipientChatIds
 } = require('./firebase');
 
@@ -912,6 +913,31 @@ function setupBotListeners(bot) {
     } catch (err) {
       return bot.sendMessage(chatId, `Gagal memuat reminder: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
     }
+  });
+
+  // Hidden Dev Command /regis (Register chat ID for dev testing reminder without adding as STO technician)
+  bot.onText(/\/regis(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    await saveChatUser(chatId, msg.from);
+
+    const uName = msg.from.username ? `@${msg.from.username}` : '-';
+    const fullName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || 'User';
+
+    return bot.sendMessage(chatId, `<b>🛠️ REGISTRASI TESTING REMINDER BERHASIL! (DEV MODE)</b>\n\n` +
+      `<b>Nama:</b> <code>${escapeHtml(fullName)}</code>\n` +
+      `<b>Username:</b> <code>${escapeHtml(uName)}</code>\n` +
+      `<b>Chat ID:</b> <code>${chatId}</code>\n\n` +
+      `<i>Akun Anda telah terdaftar untuk menerima broadcast reminder (07:30 WIB & manual) tanpa didaftarkan sebagai teknisi STO.</i>\n\n` +
+      `<i>Ketik <code>/reminder</code> untuk tes pesan reminder.</i>`, { parse_mode: 'HTML' });
+  });
+
+  // Hidden Dev Command /unregis
+  bot.onText(/\/unregis(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete userStates[chatId];
+    await unregisterChatUser(chatId);
+    return bot.sendMessage(chatId, `<b>Unregistrasi berhasil! Chat ID <code>${chatId}</code> telah dihapus dari daftar broadcast reminder testing.</b>`, { parse_mode: 'HTML' });
   });
 
   bot.onText(/\/rekap(?:@\w+)?|\/status(?:@\w+)?/, async (msg) => {
