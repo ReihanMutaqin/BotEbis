@@ -701,6 +701,8 @@ function setupBotListeners(bot) {
   bot.on('message', async (msg) => {
     if (!msg.text) return;
     const chatId = msg.chat.id;
+    const userKey = msg.from ? msg.from.id : chatId;
+    const updatedBy = getSenderTag(msg.from);
     saveChatUser(chatId, msg.from);
     if (msg.text.startsWith('/')) return;
     const text = msg.text.trim();
