@@ -1775,40 +1775,61 @@ async function handleSearch(bot, chatId, rawQueryStr, page = 1, messageId = null
 async function handleRekap(bot, chatId) {
   try {
     const tasks = await getAllTasks();
-    const counts = {
-      Total: tasks.length,
+    const overall = {
+      Total: 0,
       Pending: 0,
       'On Progress': 0,
       Completed: 0,
       Kendala: 0,
       Cancel: 0
     };
+    const witelCounts = {};
 
     tasks.forEach(t => {
-      const st = t.trackerStatus || 'Pending';
-      if (counts[st] !== undefined) counts[st]++;
-      else counts.Pending++;
+      let st = t.trackerStatus || 'Pending';
+      if (overall[st] === undefined) st = 'Pending';
+      
+      const witel = (t.witel || 'WITEL LAIN').toUpperCase().trim();
+
+      overall[st]++;
+      overall.Total++;
+
+      if (!witelCounts[witel]) {
+        witelCounts[witel] = { Total: 0, Pending: 0, 'On Progress': 0, Completed: 0, Kendala: 0, Cancel: 0 };
+      }
+      witelCounts[witel][st]++;
+      witelCounts[witel].Total++;
     });
 
-    const text = `<b>REKAPITULASI STATUS WORK ORDER EBIS</b>\n` +
-      `═════════════════════════\n` +
-      `<b>Total Order:</b> <code>${counts.Total}</code>\n\n` +
-      `<b>Pending:</b> <code>${counts.Pending}</code>\n` +
-      `<b>On Progress:</b> <code>${counts['On Progress']}</code>\n` +
-      `<b>Completed:</b> <code>${counts.Completed}</code>\n` +
-      `<b>Kendala:</b> <code>${counts.Kendala}</code>\n` +
-      `<b>Cancel:</b> <code>${counts.Cancel}</code>\n` +
+    let text = `<b>REKAPITULASI STATUS WORK ORDER EBIS</b>\n` +
+      `═════════════════════════\n\n`;
+
+    const witelKeys = Object.keys(witelCounts).sort();
+    witelKeys.forEach(w => {
+      const wc = witelCounts[w];
+      text += `<b>📍 WITEL ${escapeHtml(w)}</b>\n` +
+        `Total: <b>${wc.Total}</b> | ⏳ Pend: ${wc.Pending} | 🚧 Prog: ${wc['On Progress']} | ⚠️ Kdl: ${wc.Kendala} | ✅ Comp: ${wc.Completed}\n\n`;
+    });
+
+    text += `═════════════════════════\n` +
+      `<b>📊 TOTAL KESELURUHAN:</b>\n` +
+      `<b>Total Order:</b> <code>${overall.Total}</code>\n` +
+      `<b>Pending:</b> <code>${overall.Pending}</code>\n` +
+      `<b>On Progress:</b> <code>${overall['On Progress']}</code>\n` +
+      `<b>Completed:</b> <code>${overall.Completed}</code>\n` +
+      `<b>Kendala:</b> <code>${overall.Kendala}</code>\n` +
+      `<b>Cancel:</b> <code>${overall.Cancel}</code>\n` +
       `═════════════════════════\n` +
       `<i>Klik tombol di bawah untuk melihat daftar spesifik:</i>`;
 
     const inline_keyboard = [
       [
-        { text: `Pending (${counts.Pending})`, callback_data: 'filter_st:Pending' },
-        { text: `Progress (${counts['On Progress']})`, callback_data: 'filter_st:On Progress' }
+        { text: `Pending (${overall.Pending})`, callback_data: 'filter_st:Pending' },
+        { text: `Progress (${overall['On Progress']})`, callback_data: 'filter_st:On Progress' }
       ],
       [
-        { text: `Kendala (${counts.Kendala})`, callback_data: 'filter_st:Kendala' },
-        { text: `Completed (${counts.Completed})`, callback_data: 'filter_st:Completed' }
+        { text: `Kendala (${overall.Kendala})`, callback_data: 'filter_st:Kendala' },
+        { text: `Completed (${overall.Completed})`, callback_data: 'filter_st:Completed' }
       ]
     ];
 
