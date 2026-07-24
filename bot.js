@@ -502,6 +502,91 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
 }
 
 function setupBotListeners(bot) {
+  const originalOnText = bot.onText.bind(bot);
+  bot.onText = function (regexp, callback) {
+    originalOnText(regexp, async (msg, match) => {
+      const allowedCommands = ['/start', '/help', '/daftar_teknisi', '/myid', '/regis', '/unregis', '/listadmin'];
+      const isAllowed = allowedCommands.some(cmd => regexp.source.includes(cmd.replace('/', '\\/')));
+      
+      if (isAllowed) return callback(msg, match);
+
+      const chatIdStr = String(msg.chat.id);
+      let isAuthorized = false;
+
+      const admins = await getAllAdminUsers();
+      if (msg.from && msg.from.username) {
+        const username = msg.from.username.toLowerCase();
+        if (username === 'rei219' || admins.some(a => a.username.toLowerCase() === username)) {
+          isAuthorized = true;
+        }
+      }
+
+      if (!isAuthorized) {
+        const techs = await getAllTechnicians();
+        const cleanUser = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
+        isAuthorized = techs.some(t => {
+          const tUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+          const tChatId = t.chatId ? String(t.chatId).trim() : '';
+          return (cleanUser && tUser === cleanUser) || (tChatId === chatIdStr);
+        });
+      }
+
+      if (!isAuthorized) {
+        return bot.sendMessage(msg.chat.id, `Anda harus terdaftar dahuli untuk dapat mengakses bot ini\nsilahkan lakukan /daftar_teknisi STO "Nama Anda"\nUntuk nama silahkan Gunakan " "`);
+      }
+
+      return callback(msg, match);
+    });
+  };
+
+  const originalOn = bot.on.bind(bot);
+  bot.on = function (eventName, callback) {
+    if (eventName === 'callback_query' || eventName === 'message') {
+      originalOn(eventName, async (eventObj) => {
+        const isMessage = eventName === 'message';
+        if (isMessage && eventObj.text && eventObj.text.startsWith('/')) {
+          return callback(eventObj);
+        }
+
+        const msgOrQuery = eventObj;
+        const from = msgOrQuery.from;
+        const chat = isMessage ? msgOrQuery.chat : msgOrQuery.message.chat;
+        const chatIdStr = String(chat.id);
+        
+        let isAuthorized = false;
+
+        const admins = await getAllAdminUsers();
+        if (from && from.username) {
+          const username = from.username.toLowerCase();
+          if (username === 'rei219' || admins.some(a => a.username.toLowerCase() === username)) {
+            isAuthorized = true;
+          }
+        }
+
+        if (!isAuthorized) {
+          const techs = await getAllTechnicians();
+          const cleanUser = from && from.username ? from.username.toLowerCase() : '';
+          isAuthorized = techs.some(t => {
+            const tUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+            const tChatId = t.chatId ? String(t.chatId).trim() : '';
+            return (cleanUser && tUser === cleanUser) || (tChatId === chatIdStr);
+          });
+        }
+
+        if (!isAuthorized) {
+          if (eventName === 'callback_query') {
+            await bot.answerCallbackQuery(msgOrQuery.id, { text: 'Akses ditolak. Anda belum terdaftar.', show_alert: true });
+          }
+          return bot.sendMessage(chatIdStr, `Anda harus terdaftar dahuli untuk dapat mengakses bot ini\nsilahkan lakukan /daftar_teknisi STO "Nama Anda"\nUntuk nama silahkan Gunakan " "`);
+        }
+
+        return callback(eventObj);
+      });
+    } else {
+      originalOn(eventName, callback);
+    }
+  };
+
   // Command /start & /help
   bot.onText(/\/start(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
