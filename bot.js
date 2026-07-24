@@ -505,7 +505,7 @@ function setupBotListeners(bot) {
   const originalOnText = bot.onText.bind(bot);
   bot.onText = function (regexp, callback) {
     originalOnText(regexp, async (msg, match) => {
-      const allowedCommands = ['/start', '/help', '/daftar_teknisi', '/myid', '/regis', '/unregis', '/listadmin'];
+      const allowedCommands = ['/start', '/help', '/daftar_teknisi', '/myid', '/regis', '/unregis', '/listadmin', '/listdev'];
       const isAllowed = allowedCommands.some(cmd => regexp.source.includes(cmd.replace('/', '\\/')));
       
       if (isAllowed) return callback(msg, match);
@@ -1141,6 +1141,43 @@ function setupBotListeners(bot) {
     await setUserWitel(chatId, witelInput);
     return bot.sendMessage(chatId, `✅ <b>Filter Witel reminder Anda berhasil diubah menjadi: <code>${escapeHtml(witelInput)}</code></b>\n\n` +
       `<i>Pesan reminder harian & broadcast akan otomatis difilter khusus Witel ini.</i>`, { parse_mode: 'HTML' });
+  });
+
+  // Command /listdev
+  bot.onText(/\/listdev(?:@\w+)?/, async (msg) => {
+    const chatId = msg.chat.id;
+    saveChatUser(chatId, msg.from);
+
+    const allowedDevs = ['rei219', 'dheodermawan'];
+    const senderUsername = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
+    
+    if (!allowedDevs.includes(senderUsername)) {
+      return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah ini khusus untuk Dev.`, { parse_mode: 'HTML' });
+    }
+
+    try {
+      const admins = await getAllAdminUsers();
+      const devs = admins.filter(a => a.password === 'dev_bypass');
+      
+      if (devs.length === 0) {
+        return bot.sendMessage(chatId, `Belum ada akun Dev yang didaftarkan melalui /regis.`, { parse_mode: 'HTML' });
+      }
+
+      let devListText = '';
+      devs.forEach((dev, i) => {
+        devListText += `${i + 1}. Username: <code>@${escapeHtml(dev.username)}</code>\n    Didaftarkan oleh: ${escapeHtml(dev.createdBy || '-')}\n`;
+      });
+
+      const text = `👨‍💻 <b>DAFTAR AKUN DEV (ALL AKSES)</b>\n` +
+        `═════════════════════════\n` +
+        `${devListText}` +
+        `═════════════════════════\n` +
+        `<i>*Akun di atas didaftarkan menggunakan perintah /regis</i>`;
+        
+      return bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Gagal memuat list dev: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
   });
 
   // Secret Admin Command /dashboard & /listadmin (Restricted to @Rei219 / ID 902544604)
