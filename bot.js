@@ -1681,10 +1681,15 @@ function formatDailyReminderText(tasks, userProfile = null) {
     year: 'numeric',
     timeZone: 'Asia/Jakarta'
   });
+  const timeStr = now.toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Jakarta'
+  }).replace(/\./g, ':');
 
   if (!tasks || tasks.length === 0) {
     return `<b>🔔 REMINDER WORK ORDER EBIS</b>\n` +
-      `📅 <i>${dateStr} • 07:30 WIB</i>\n` +
+      `📅 <i>${dateStr} • ${timeStr} WIB</i>\n` +
       `═════════════════════════\n\n` +
       `<i>Belum ada data work order aktif.</i>`;
   }
@@ -1754,7 +1759,7 @@ function formatDailyReminderText(tasks, userProfile = null) {
   const stoTag = userProfile?.sto ? ` • STO <code>${escapeHtml(userProfile.sto)}</code>` : '';
 
   let text = `${headerTitle}\n` +
-    `📅 <i>${dateStr} • 07:30 WIB${stoTag}</i>\n` +
+    `📅 <i>${dateStr} • ${timeStr} WIB${stoTag}</i>\n` +
     `═════════════════════════\n\n`;
 
   const witelKeys = Object.keys(grouped).sort();
