@@ -38,7 +38,7 @@ function isAuthorizedAdmin(from) {
   if (!from) return false;
   const isIdMatch = String(from.id) === '902544604';
   const isUsernameMatch = from.username && (
-    from.username.toLowerCase() === 'rei219' || 
+    from.username.toLowerCase() === 'rei219' ||
     from.username.toLowerCase() === 'reih'
   );
   return isIdMatch || isUsernameMatch;
@@ -508,7 +508,7 @@ async function checkUserSTOAccess(from, chatId, taskSTO) {
   if (from && from.username) {
     const username = from.username.toLowerCase();
     if (username === 'rei219' || admins.some(a => a.username.toLowerCase() === username)) {
-      return { allowed: true, mySTO: 'ALL ACCESS' }; 
+      return { allowed: true, mySTO: 'ALL ACCESS' };
     }
   }
 
@@ -521,7 +521,7 @@ async function checkUserSTOAccess(from, chatId, taskSTO) {
   });
 
   if (!myTech) return { allowed: false, mySTO: 'TIDAK TERDAFTAR' };
-  
+
   const mySTO = (myTech.sto || '').toUpperCase().trim();
   const tSTO = (taskSTO || '').toUpperCase().trim();
 
@@ -537,7 +537,7 @@ function setupBotListeners(bot) {
     originalOnText(regexp, async (msg, match) => {
       const allowedCommands = ['/start', '/help', '/daftar_teknisi', '/myid', '/regis', '/unregis', '/listadmin', '/listdev'];
       const isAllowed = allowedCommands.some(cmd => regexp.source.includes(cmd.replace('/', '\\/')));
-      
+
       if (isAllowed) return callback(msg, match);
 
       const chatIdStr = String(msg.chat.id);
@@ -582,7 +582,7 @@ function setupBotListeners(bot) {
         const from = msgOrQuery.from;
         const chat = isMessage ? msgOrQuery.chat : msgOrQuery.message.chat;
         const chatIdStr = String(chat.id);
-        
+
         let isAuthorized = false;
 
         const admins = await getAllAdminUsers();
@@ -607,7 +607,7 @@ function setupBotListeners(bot) {
           if (eventName === 'callback_query') {
             await bot.answerCallbackQuery(msgOrQuery.id, { text: 'Akses ditolak. Anda belum terdaftar.', show_alert: true });
           }
-          return bot.sendMessage(chatIdStr, `Anda harus terdaftar dahuli untuk dapat mengakses bot ini\nsilahkan lakukan /daftar_teknisi STO "Nama Anda"\nUntuk nama silahkan Gunakan " "`);
+          return bot.sendMessage(chatIdStr, `Anda harus terdaftar dahulu untuk dapat mengakses bot ini\nsilahkan lakukan /daftar_teknisi STO "Nama Anda"\nUntuk nama silahkan Gunakan " "`);
         }
 
         return callback(eventObj);
@@ -914,15 +914,40 @@ function setupBotListeners(bot) {
             const matchedStatus = validStatuses.find(s => s.toLowerCase() === parsed.status.toLowerCase());
             if (matchedStatus) updates.trackerStatus = matchedStatus;
           }
+
+          let autoAssignTech = false;
           if (parsed.technicianName) {
             if (parsed.technicianName.toLowerCase() === ':me') {
-              updates.technicianName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+              autoAssignTech = true;
             } else if (parsed.technicianName === '-') {
               updates.technicianName = '';
             } else {
               updates.technicianName = parsed.technicianName;
             }
+          } else if (!task.technicianName || task.technicianName === '-' || task.technicianName === 'Belum ditugaskan') {
+            autoAssignTech = true;
           }
+
+          if (autoAssignTech) {
+            try {
+              const techs = await getAllTechnicians();
+              const cleanUser = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
+              const myTech = techs.find(t => {
+                const tUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+                const tChatId = t.chatId ? String(t.chatId).trim() : '';
+                return (cleanUser && tUser === cleanUser) || (tChatId === String(chatId));
+              });
+              
+              if (myTech) {
+                updates.technicianName = myTech.name;
+              } else {
+                updates.technicianName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || (msg.from.username ? `@${msg.from.username}` : 'Teknisi');
+              }
+            } catch (e) {
+              console.error("Error auto-assigning technician:", e);
+            }
+          }
+
           if (parsed.notes) updates.notes = parsed.notes;
 
           await updateTask(task.id, updates);
@@ -1003,7 +1028,7 @@ function setupBotListeners(bot) {
     const chatId = msg.chat.id;
     delete userStates[chatId];
     const orderId = match[1] ? match[1].trim() : null;
-    
+
     if (!orderId) {
       return bot.sendMessage(chatId, `<b>Format Perintah Alih:</b>\n<code>/alih &lt;order_id&gt;</code>\n\nContoh: <code>/alih 1002119373</code>`, { parse_mode: 'HTML' });
     }
@@ -1129,7 +1154,7 @@ function setupBotListeners(bot) {
 
     const allowedDevs = ['rei219', 'dheodermawan'];
     const senderUsername = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
-    
+
     if (!allowedDevs.includes(senderUsername)) {
       return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Hanya @Rei219 dan @dheodermawan yang dapat mendaftarkan akun Dev.`, { parse_mode: 'HTML' });
     }
@@ -1141,7 +1166,7 @@ function setupBotListeners(bot) {
 
     const usernameMatch = inputData.match(/@([a-zA-Z0-9_]+)/);
     if (!usernameMatch) {
-       return bot.sendMessage(chatId, `Harap cantumkan username Telegram dengan awalan '@'.\nContoh: <code>/regis Reyhan @Rei219</code>`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `Harap cantumkan username Telegram dengan awalan '@'.\nContoh: <code>/regis Reyhan @Rei219</code>`, { parse_mode: 'HTML' });
     }
 
     const targetUsernameStr = usernameMatch[0];
@@ -1198,7 +1223,7 @@ function setupBotListeners(bot) {
 
     const allowedDevs = ['rei219', 'dheodermawan'];
     const senderUsername = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
-    
+
     if (!allowedDevs.includes(senderUsername)) {
       return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah ini khusus untuk Dev.`, { parse_mode: 'HTML' });
     }
@@ -1206,7 +1231,7 @@ function setupBotListeners(bot) {
     try {
       const admins = await getAllAdminUsers();
       const devs = admins.filter(a => a.password === 'dev_bypass');
-      
+
       if (devs.length === 0) {
         return bot.sendMessage(chatId, `Belum ada akun Dev yang didaftarkan melalui /regis.`, { parse_mode: 'HTML' });
       }
@@ -1221,7 +1246,7 @@ function setupBotListeners(bot) {
         `${devListText}` +
         `═════════════════════════\n` +
         `<i>*Akun di atas didaftarkan menggunakan perintah /regis</i>`;
-        
+
       return bot.sendMessage(chatId, text, { parse_mode: 'HTML' });
     } catch (err) {
       return bot.sendMessage(chatId, `Gagal memuat list dev: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
@@ -1440,20 +1465,20 @@ function setupBotListeners(bot) {
         if (!task) {
           return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
         }
-        
+
         const taskSTO = task.sto || '';
         const matchedTechs = await getTechniciansBySTO(taskSTO);
         const selectedTech = matchedTechs.find(t => String(t.chatId) === String(targetChatId));
-        
+
         if (!selectedTech) {
-          return bot.sendMessage(chatId, `DEBUG: targetChatId="${targetChatId}", available=[${matchedTechs.map(t=>t.chatId).join(',')}] | Teknisi tidak ditemukan atau tidak terdaftar di STO ${taskSTO}.`, { parse_mode: 'HTML' });
+          return bot.sendMessage(chatId, `DEBUG: targetChatId="${targetChatId}", available=[${matchedTechs.map(t => t.chatId).join(',')}] | Teknisi tidak ditemukan atau tidak terdaftar di STO ${taskSTO}.`, { parse_mode: 'HTML' });
         }
 
         const techName = `${selectedTech.name} ${selectedTech.username || ''}`.trim();
         await updateTask(task.id, { technicianName: techName, updatedBy });
-        
+
         const updatedTask = await getTaskById(task.id);
-        
+
         try {
           const tId = selectedTech.chatId.startsWith('@') ? selectedTech.chatId : selectedTech.chatId;
           const notifyMsg = `<b>🔄 WORK ORDER DIALIHKAN (STO ${escapeHtml(taskSTO)})</b>\n\n` +
@@ -1467,7 +1492,7 @@ function setupBotListeners(bot) {
         } catch (e) {
           console.error("Gagal mengirim notif alih", e);
         }
-        
+
         return bot.sendMessage(chatId, `✅ <b>Order ${escapeHtml(updatedTask.id)} berhasil dialihkan ke ${escapeHtml(selectedTech.name)}.</b>`, { parse_mode: 'HTML' });
       } catch (err) {
         return bot.sendMessage(chatId, `Gagal mengalihkan order: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
@@ -1489,7 +1514,7 @@ function setupBotListeners(bot) {
 
         await updateTask(task.id, { trackerStatus: newStatus, updatedBy });
         const updatedTask = await getTaskById(task.id);
-        
+
         userStates[stateKey] = { action: 'awaiting_note', orderId: task.id };
         userStates[chatId] = { action: 'awaiting_note', orderId: task.id };
         const promptText = buildPromptForMissingFields(updatedTask, newStatus);
@@ -1860,7 +1885,15 @@ async function handleUpdateNote(bot, chatId, orderId, notesText, updatedBy = '-'
       if (parsed.woId) updates.woId = parsed.woId;
       if (parsed.nik) updates.nik = parsed.nik;
       if (parsed.notes) updates.notes = parsed.notes;
-      if (parsed.technicianName) updates.technicianName = parsed.technicianName;
+      if (parsed.technicianName) {
+        if (parsed.technicianName.toLowerCase() === ':me') {
+          updates.technicianName = updatedBy; // Will be overwritten by auto-assign below if tech found
+        } else if (parsed.technicianName === '-') {
+          updates.technicianName = '';
+        } else {
+          updates.technicianName = parsed.technicianName;
+        }
+      }
       if (parsed.status) {
         const validStatuses = ['Pending', 'On Progress', 'Completed', 'Kendala', 'Cancel'];
         const matchedStatus = validStatuses.find(s => s.toLowerCase() === parsed.status.toLowerCase());
@@ -1868,6 +1901,26 @@ async function handleUpdateNote(bot, chatId, orderId, notesText, updatedBy = '-'
       }
     } else {
       updates.notes = notesText;
+    }
+
+    if (!updates.technicianName && (!task.technicianName || task.technicianName === '-' || task.technicianName === 'Belum ditugaskan')) {
+      try {
+        const techs = await getAllTechnicians();
+        const cleanUser = updatedBy.startsWith('@') ? updatedBy.substring(1).toLowerCase() : '';
+        const myTech = techs.find(t => {
+          const tUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+          const tChatId = t.chatId ? String(t.chatId).trim() : '';
+          return (cleanUser && tUser === cleanUser) || (tChatId === String(chatId));
+        });
+        
+        if (myTech) {
+          updates.technicianName = myTech.name;
+        } else if (parsed && parsed.technicianName && parsed.technicianName.toLowerCase() === ':me') {
+          updates.technicianName = updatedBy;
+        }
+      } catch (e) {
+        console.error("Error auto-assigning technician:", e);
+      }
     }
 
     await updateTask(task.id, updates);
