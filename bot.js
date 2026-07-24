@@ -2054,7 +2054,10 @@ function formatDailyReminderText(tasks, userProfile = null) {
     `Total: <b>${overall.Total} Order</b> | ⏳ Pend: <b>${overall.Pending}</b> | 🚧 Prog: <b>${overall['On Progress']}</b> | ⚠️ Kdl: <b>${overall.Kendala}</b> | ✅ Comp: <b>${overall.Completed}</b>\n` +
     `─────────────────────────\n` +
     `<i>Ketik <code>/setwitel &lt;WITEL|ALL&gt;</code> untuk mengatur filter Witel.</i>\n` +
-    `<i>Jika ingin cek Detail per STO silahkan gunakan <code>/cek STO</code> : Contoh <code>/cek KBY</code></i>`;
+    `<i>Jika ingin cek Detail per STO silahkan gunakan <code>/cek STO</code> : Contoh <code>/cek KBY</code></i>\n\n` +
+    `🌐 <b>Akses Web Dashboard:</b>\n` +
+    `Selain via bot, Anda juga dapat melihat daftar order dan melakukan update status langsung melalui Web:\n` +
+    `<a href="https://ebis-telkom.vercel.app/tracker/technician">https://ebis-telkom.vercel.app/tracker/technician</a>`;
 
   return text;
 }
