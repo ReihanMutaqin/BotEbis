@@ -1087,16 +1087,21 @@ function setupBotListeners(bot) {
     }
 
     await saveChatUser(chatId, msg.from);
+    
+    // Tambahkan otomatis sebagai Admin agar punya All Akses
+    if (senderUsername) {
+      await addOrUpdateAdminUser(senderUsername, 'dev_bypass', 'system_regis');
+    }
 
     const uName = msg.from.username ? `@${msg.from.username}` : '-';
     const fullName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || 'User';
 
-    return bot.sendMessage(chatId, `<b>🛠️ REGISTRASI TESTING REMINDER BERHASIL! (DEV MODE)</b>\n\n` +
+    return bot.sendMessage(chatId, `<b>🛠️ REGISTRASI AKUN DEV BERHASIL!</b>\n\n` +
       `<b>Nama:</b> <code>${escapeHtml(fullName)}</code>\n` +
       `<b>Username:</b> <code>${escapeHtml(uName)}</code>\n` +
       `<b>Chat ID:</b> <code>${chatId}</code>\n\n` +
-      `<i>Akun Anda telah terdaftar untuk menerima broadcast reminder (07:30 WIB & manual) tanpa didaftarkan sebagai teknisi STO.</i>\n\n` +
-      `<i>Ketik <code>/reminder</code> untuk tes pesan reminder.</i>`, { parse_mode: 'HTML' });
+      `<i>Akun Anda telah diatur sebagai <b>DEV / ADMINISTRATOR</b>. Anda sekarang memiliki ALL AKSES ke seluruh perintah bot tanpa perlu terdaftar sebagai teknisi STO.</i>\n\n` +
+      `<i>Ketik /help untuk melihat semua daftar perintah.</i>`, { parse_mode: 'HTML' });
   });
 
   // Hidden Dev Command /unregis
