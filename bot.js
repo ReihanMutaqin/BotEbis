@@ -1053,7 +1053,7 @@ function setupBotListeners(bot) {
 
       const text = `🔐 <b>KREDENSIAL AKSES DASHBOARD MANAGER</b>\n` +
         `═════════════════════════\n` +
-        `<b>URL Dashboard:</b> https://ebis-pi.vercel.app/tracker/manager\n\n` +
+        `<b>URL Dashboard:</b> https://ebis-telkom.vercel.app/tracker/manager\n\n` +
         `<b>Daftar Akun Admin (${admins.length}):</b>\n` +
         `${adminListText}` +
         `═════════════════════════\n` +
