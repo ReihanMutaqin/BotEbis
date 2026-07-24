@@ -48,9 +48,9 @@ Bot Telegram interaktif yang terhubung langsung secara real-time ke **Firebase F
    - `VITE_FIREBASE_STORAGE_BUCKET`: `<YOUR_FIREBASE_STORAGE_BUCKET>`
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`: `<YOUR_FIREBASE_MESSAGING_SENDER_ID>`
    - `VITE_FIREBASE_APP_ID`: `<YOUR_FIREBASE_APP_ID>`
-3. Setelah deploy selesai dan kamu mendapatkan URL (misal: `https://ebis-bot.vercel.app`), aktifkan Webhook Telegram dengan menjalankan command:
+3. Setelah deploy selesai dan kamu mendapatkan URL (misal: `https://bot-ebis-telkom.vercel.app`), aktifkan Webhook Telegram dengan menjalankan command:
    ```bash
-   node set_webhook.js https://ebis-bot.vercel.app
+   node set_webhook.js https://bot-ebis-telkom.vercel.app
    ```
 4. Bot akan **aktif 24 jam nonstop gratis** tanpa perlu laptop dinyalakan!
 

@@ -11,7 +11,7 @@ if (!token) {
 
 if (!webhookUrl) {
   console.log('📌 Penggunaan: node set_webhook.js <URL_HOSTING_KAMU>');
-  console.log('   Contoh: node set_webhook.js https://ebis-bot.vercel.app');
+  console.log('   Contoh: node set_webhook.js https://bot-ebis-telkom.vercel.app');
   process.exit(1);
 }
 
