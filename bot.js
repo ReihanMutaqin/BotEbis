@@ -1075,7 +1075,7 @@ function setupBotListeners(bot) {
   });
 
   // Hidden Dev Command /regis (Register chat ID for dev testing reminder without adding as STO technician)
-  bot.onText(/\/regis(?:@\w+)?/, async (msg) => {
+  bot.onText(/\/regis(?:@\w+)?(?:\s+(.+))?/, async (msg, match) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
 
@@ -1083,25 +1083,35 @@ function setupBotListeners(bot) {
     const senderUsername = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
     
     if (!allowedDevs.includes(senderUsername)) {
-      return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah /regis khusus untuk Dev/Atasan.`, { parse_mode: 'HTML' });
+      return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Hanya @Rei219 dan @dheodermawan yang dapat mendaftarkan akun Dev.`, { parse_mode: 'HTML' });
     }
 
-    await saveChatUser(chatId, msg.from);
-    
-    // Tambahkan otomatis sebagai Admin agar punya All Akses
-    if (senderUsername) {
-      await addOrUpdateAdminUser(senderUsername, 'dev_bypass', 'system_regis');
+    const inputData = match[1];
+    if (!inputData) {
+      return bot.sendMessage(chatId, `<b>Format Registrasi Dev salah!</b>\n\nGunakan format:\n<code>/regis Nama @Username</code>\n\nContoh: <code>/regis Reyhan @Rei219</code>`, { parse_mode: 'HTML' });
     }
 
-    const uName = msg.from.username ? `@${msg.from.username}` : '-';
-    const fullName = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || 'User';
+    const usernameMatch = inputData.match(/@([a-zA-Z0-9_]+)/);
+    if (!usernameMatch) {
+       return bot.sendMessage(chatId, `Harap cantumkan username Telegram dengan awalan '@'.\nContoh: <code>/regis Reyhan @Rei219</code>`, { parse_mode: 'HTML' });
+    }
 
-    return bot.sendMessage(chatId, `<b>🛠️ REGISTRASI AKUN DEV BERHASIL!</b>\n\n` +
-      `<b>Nama:</b> <code>${escapeHtml(fullName)}</code>\n` +
-      `<b>Username:</b> <code>${escapeHtml(uName)}</code>\n` +
-      `<b>Chat ID:</b> <code>${chatId}</code>\n\n` +
-      `<i>Akun Anda telah diatur sebagai <b>DEV / ADMINISTRATOR</b>. Anda sekarang memiliki ALL AKSES ke seluruh perintah bot tanpa perlu terdaftar sebagai teknisi STO.</i>\n\n` +
-      `<i>Ketik /help untuk melihat semua daftar perintah.</i>`, { parse_mode: 'HTML' });
+    const targetUsernameStr = usernameMatch[0];
+    const targetUsername = usernameMatch[1].toLowerCase();
+    const targetName = inputData.replace(targetUsernameStr, '').trim() || 'Dev';
+
+    try {
+      // Tambahkan target username sebagai Admin
+      await addOrUpdateAdminUser(targetUsername, 'dev_bypass', `@${senderUsername}`);
+
+      return bot.sendMessage(chatId, `<b>🛠️ REGISTRASI AKUN DEV BERHASIL!</b>\n\n` +
+        `<b>Nama:</b> <code>${escapeHtml(targetName)}</code>\n` +
+        `<b>Username:</b> <code>${escapeHtml(targetUsernameStr)}</code>\n` +
+        `<b>Didaftarkan Oleh:</b> @${escapeHtml(senderUsername)}\n\n` +
+        `<i>Akun ${escapeHtml(targetUsernameStr)} telah diatur sebagai <b>DEV / ADMINISTRATOR</b> dan memiliki ALL AKSES ke seluruh perintah bot.</i>`, { parse_mode: 'HTML' });
+    } catch (err) {
+      return bot.sendMessage(chatId, `Terjadi kesalahan: ${escapeHtml(err.message)}`, { parse_mode: 'HTML' });
+    }
   });
 
   // Hidden Dev Command /unregis
