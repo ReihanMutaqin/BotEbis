@@ -1078,6 +1078,14 @@ function setupBotListeners(bot) {
   bot.onText(/\/regis(?:@\w+)?/, async (msg) => {
     const chatId = msg.chat.id;
     delete userStates[chatId];
+
+    const allowedDevs = ['rei219', 'dheodermawan'];
+    const senderUsername = msg.from && msg.from.username ? msg.from.username.toLowerCase() : '';
+    
+    if (!allowedDevs.includes(senderUsername)) {
+      return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Perintah /regis khusus untuk Dev/Atasan.`, { parse_mode: 'HTML' });
+    }
+
     await saveChatUser(chatId, msg.from);
 
     const uName = msg.from.username ? `@${msg.from.username}` : '-';
