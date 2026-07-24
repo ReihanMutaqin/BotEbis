@@ -501,6 +501,36 @@ async function sendPaginatedTaskList(bot, chatId, title, tasks, page = 1, filter
   }
 }
 
+async function checkUserSTOAccess(from, chatId, taskSTO) {
+  if (!taskSTO || taskSTO.trim() === '' || taskSTO.trim() === '-') return { allowed: true, mySTO: 'ALL ACCESS' };
+
+  const admins = await getAllAdminUsers();
+  if (from && from.username) {
+    const username = from.username.toLowerCase();
+    if (username === 'rei219' || admins.some(a => a.username.toLowerCase() === username)) {
+      return { allowed: true, mySTO: 'ALL ACCESS' }; 
+    }
+  }
+
+  const techs = await getAllTechnicians();
+  const cleanUser = from && from.username ? from.username.toLowerCase() : '';
+  const myTech = techs.find(t => {
+    const tUser = t.username ? String(t.username).replace(/^@/, '').trim().toLowerCase() : '';
+    const tChatId = t.chatId ? String(t.chatId).trim() : '';
+    return (cleanUser && tUser === cleanUser) || (tChatId === String(chatId));
+  });
+
+  if (!myTech) return { allowed: false, mySTO: 'TIDAK TERDAFTAR' };
+  
+  const mySTO = (myTech.sto || '').toUpperCase().trim();
+  const tSTO = (taskSTO || '').toUpperCase().trim();
+
+  if (!mySTO || mySTO === '-') return { allowed: false, mySTO: 'TIDAK ADA STO' };
+
+  if (mySTO === tSTO) return { allowed: true, mySTO };
+  return { allowed: false, mySTO };
+}
+
 function setupBotListeners(bot) {
   const originalOnText = bot.onText.bind(bot);
   bot.onText = function (regexp, callback) {
@@ -737,6 +767,14 @@ function setupBotListeners(bot) {
       techName = '';
     }
 
+    const task = await getTaskById(orderId);
+    if (task) {
+      const access = await checkUserSTOAccess(msg.from, chatId, task.sto);
+      if (!access.allowed) {
+        return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Anda adalah teknisi STO <b>${escapeHtml(access.mySTO)}</b>, sedangkan task ini milik STO <b>${escapeHtml(task.sto)}</b>.`, { parse_mode: 'HTML' });
+      }
+    }
+
     const updater = getSenderTag(msg.from);
     return handleAssignTechnician(bot, chatId, orderId, techName, updater);
   });
@@ -772,6 +810,11 @@ function setupBotListeners(bot) {
       const task = await getTaskById(orderId);
       if (!task) {
         return bot.sendMessage(chatId, `Work order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
+      }
+
+      const access = await checkUserSTOAccess(msg.from, chatId, task.sto);
+      if (!access.allowed) {
+        return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Anda adalah teknisi STO <b>${escapeHtml(access.mySTO)}</b>, sedangkan task ini milik STO <b>${escapeHtml(task.sto)}</b>.`, { parse_mode: 'HTML' });
       }
 
       const updatedBy = getSenderTag(msg.from);
@@ -969,6 +1012,11 @@ function setupBotListeners(bot) {
       const task = await getTaskById(orderId);
       if (!task) {
         return bot.sendMessage(chatId, `Order <code>${escapeHtml(orderId)}</code> tidak ditemukan.`, { parse_mode: 'HTML' });
+      }
+
+      const access = await checkUserSTOAccess(msg.from, chatId, task.sto);
+      if (!access.allowed) {
+        return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Anda adalah teknisi STO <b>${escapeHtml(access.mySTO)}</b>, sedangkan task ini milik STO <b>${escapeHtml(task.sto)}</b>.`, { parse_mode: 'HTML' });
       }
 
       const taskSTO = task.sto || '';
@@ -1310,6 +1358,18 @@ function setupBotListeners(bot) {
 
     await bot.answerCallbackQuery(query.id);
     const updatedBy = getSenderTag(query.from);
+
+    const isActionCallback = data.startsWith('st:') || data.startsWith('assign:') || data.startsWith('note:') || data.startsWith('alih_to:') || data.startsWith('assign_sto_notif:');
+    if (isActionCallback) {
+      const orderId = data.split(':')[1];
+      const task = await getTaskById(orderId);
+      if (task) {
+        const access = await checkUserSTOAccess(query.from, chatId, task.sto);
+        if (!access.allowed) {
+          return bot.sendMessage(chatId, `⛔ <b>Akses ditolak!</b> Anda STO <b>${escapeHtml(access.mySTO)}</b>, task ini STO <b>${escapeHtml(task.sto)}</b>.`, { parse_mode: 'HTML' });
+        }
+      }
+    }
 
     if (data === 'show_rekap') {
       delete userStates[chatId];
