@@ -62,7 +62,7 @@ async function getTaskById(orderId) {
   return found || null;
 }
 
-const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL || 'https://script.google.com/macros/s/AKfycby0jct0vhgp_Z31Zol3LtL-QU63jG8ZkgBRJk2TdSz0cEmyeOmwBxL1jqwcDAc6AecRkA/exec';
+const GOOGLE_SHEET_WEBHOOK_URL = process.env.GOOGLE_SHEET_WEBHOOK_URL || '';
 
 async function syncToGoogleSheets(task) {
   if (!GOOGLE_SHEET_WEBHOOK_URL || !task) return;
